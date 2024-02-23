@@ -8,8 +8,6 @@ Author: Efipay
 Author URI: http://www.efipay.com/
 */
 
-use WpOrg\Requests\Response;
-
 add_action('plugins_loaded', 'woocommerce_efipay_gateway', 0);
 
 function woocommerce_efipay_gateway() {

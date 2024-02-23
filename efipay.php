@@ -107,7 +107,6 @@ function woocommerce_efipay_gateway() {
             );
         }
 
-		// Modifica la función admin_options() para incluir el botón que abrirá el modal
 		public function admin_options() {
 			echo "<div style='text-align: center;'>";
 			echo "<div style='text-align: center;'>";
@@ -137,7 +136,6 @@ function woocommerce_efipay_gateway() {
             }
 
             $test = $this->test ? 1 : 0;
-
 			$parameters_args = [
 				"payment"  => [
 					"description" => 'Pago Plugin Woocommerce',
@@ -147,11 +145,14 @@ function woocommerce_efipay_gateway() {
 				],
 				"advanced_options" => [
 					"limit_date" => date('Y-m-d', strtotime('+1 day')),
+					"references" => [
+						"".$order->id.""
+					],
 					"result_urls" => [
 						"approved" => $this->confirmation_page,
 						"rejected" => $this->response_page,
 						"pending" => $this->await_page,
-						"webhook" => home_url().'/wp-json/my-plugin/v1/webhook'
+						"webhook" => home_url().'/wp-json/efipay/v1/webhook'
 					],
 					"has_comments" => true,
 					"comments_label" => "Aqui tu comentario"
@@ -262,27 +263,32 @@ function woocommerce_efipay_gateway() {
 // En tu plugin de WooCommerce, registra un punto final para el webhook
 add_action('woocommerce_api_efipay_webhook', 'handle_efipay_webhook');
 // deberian ir en una clase
-function handle_efipay_webhook() {
-    // Verifica si la solicitud POST contiene datos de la transacción
-	var_dump($_REQUEST, $_POST);
-    $transaction_data = $_POST; // Asegúrate de sanitizar y validar estos datos
-	// debugea  los datos del pedido en este punto
-	if (!isset($transaction_data['reference'])) {
+function handle_efipay_webhook($request) {
+	$body = json_decode($request->get_body(), true);
+    $transaction_data = $body['transaction']; 
+	$checkout = $body['checkout'];
+
+    if (!isset($transaction_data)) {
+        error_log("No se ha recibido información de la transacción");
+        wp_die("Error interno del servidor", "Error", array(
+            'response' => 500
+        ));
+    }
+
+	$order_id = $checkout['payment_gateway']['advanced_option']['references'][0];
+	if (!isset($order_id)) {
 		die("No se ha recibido información de referencia");
 	}
 
     try {
-        // Busca el pedido por su referencia externa (en este caso es "reference")
-        $order = wc_get_order(wc_clean($transaction_data['reference']));
-
+        $order = wc_get_order($order_id);
         if(!$order){
             die("No se ha encontrado el pedido");
         }
 
-        // Actualiza el estado del pedido según el resultado de la transacción
         switch ($transaction_data['status']) {
-            case 'approved':
-                $order->update_status('completed');
+            case 'Aprobada':
+                $order->update_status('completed', __('Pago completado a través de efipay.', 'efipay'));
                 break;
             case 'pending':
                 $order->update_status('on-hold');
@@ -291,31 +297,18 @@ function handle_efipay_webhook() {
                 $order->update_status('failed');
         }
         
-        // Guarda los detalles de la transacción en el pedido
         $order->add_order_note(__('Efipay transaction details', 'textdomain'));
         foreach ($transaction_data as $key => $value) {
             $order->add_order_note(sprintf("%s: %s", $key, $value));
         }
-
-        // Redirige al usuario a una página de éxito o error
-        wp_redirect(add_query_arg('payment_method', 'efipay', get_permalink($order->get_id())));
-        exit();
+		wp_send_json_success( 'Pago procesado correctamente', 200 );
     } catch (Exception $e) {
-        // Envía un correo electrónico con los detalles de la excepción
         add_filter('woocommerce_email_attachments', 'efipay_add_exception_to_emails', 10, 3);
         wc_add_notice(sprintf(__('Se ha producido un error inesperado. Por favor, contacta con nosotros para más detalles.')));
         wc_add_notice(sprintf(__('Error procesando el pago: %s', 'textdomain'), $e->getMessage()), 'error');
         remove_action('woocommerce_thankyou', 'woocommerce_output_thanks');
         add_action('woocommerce_thankyou', 'custom_thankyou_page');
     }
-
-    // Aquí procesa los datos de la transacción y actualiza el estado de la orden en WooCommerce
-    // Puedes usar la función wc_update_order_status() para actualizar el estado de la orden
-
-    // Ejemplo:
-    $order_id = $transaction_data['order_id'];
-    $order = wc_get_order($order_id);
-    $order->update_status('completed', __('Pago completado a través de efipay.', 'tu-plugin'));
 }
 
 function woocommerce_output_thanks(){
@@ -338,45 +331,38 @@ function register_webhook_route() {
         'callback' => 'handle_efipay_webhook',
 	));
 }
-// /**
-//  * Callback function for processing webhook requests.
-//  *
-//  * @param WP_REST_Request $request The REST request object.
-//  * @return WP_REST_Response|WP_Error Response object or error.
-//  */
-// function handle_webhook_request( $request ) {
-// 	// Verificar la autenticidad de la solicitud, por ejemplo, mediante la verificación de una clave secreta.
-// 	// $secret_key = 'your_secret_key';
-// 	// $provided_key = $request->get_header( 'X-Secret-Key' );
 
-// 	// if ( $provided_key !== $secret_key ) {
-// 	// 	return new WP_Error( 'unauthorized', 'Unauthorized request.', array( 'status' => 401 ) );
-// 	// }
+function style_customized() {
+    $ruta_css = plugin_dir_url( __FILE__ ) . 'css/style.css';
+    wp_enqueue_style( 'styles', $ruta_css );
+}
 
-// 	// // Recuperar los datos de la solicitud.
-// 	// $order_id = $request->get_param( 'order_id' );
-// 	// $new_status = $request->get_param( 'new_status' );
+// Agrega los estilos personalizados al hook 'wp_enqueue_scripts' para que se carguen en el frontend
+add_action( 'wp_enqueue_scripts', 'style_customized' );
 
-// 	// // Actualizar el estado de la orden en WooCommerce.
-// 	// $order = wc_get_order( $order_id );
+function add_text($icon_html, $gateway_id){
+	// html icon en description
+	// <div style='display: flex; justify-content: center'>
+	// 	'<img src=\"" . plugins_url('/img/logoEfipay.png', __FILE__) . "\" style='object-fit: cover;width: 200px;'></img>'
+	// </div>
+	if ( 'efipay' === $gateway_id ) {
+		return "<div class='efipay-text'>
+			<p>
+			Al realizar un pago con EfiPay, podrás recibir notificaciones por SMS y correo electrónico sobre el estado de tu compra<br>
+			Al realizar la compra con este método de pago, aceptas nuestras Condiciones y Política de Privacidad.
+			</p>
+			</div>"
+			;
+	}
+}
 
-// 	// if ( ! $order ) {
-// 	// 	return new WP_Error( 'invalid_order', 'Invalid order ID.', array( 'status' => 404 ) );
-// 	// }
-
-// 	// $order->update_status( $new_status );
-
-// 	return new WP_REST_Response( 'Order status updated successfully.', 200 );
-// }
-
-// add_action( 'rest_api_init', 'register_webhook_route' );
-// /**
-//  * Register the webhook route.
-//  */
-// function register_webhook_route() {
-// 	echo WP_REST_Server::CREATABLE;
-// 	register_rest_route( 'my-plugin/v1', '/webhook', array(
-// 		'methods'  => WP_REST_Server::CREATABLE,
-// 		'callback' => 'handle_webhook_request',
-// 	) );
-// }
+function add_icon($icon_html, $gateway_id){
+	if ( 'efipay' === $gateway_id ) { 
+		$icon_html = "
+			<img src=\"" . plugins_url('/img/logoEfipay.png', __FILE__) . "\" style='object-fit: cover;width: 100px; text-align:0.5rem'></img>
+		";
+		return $icon_html;
+	}
+}
+add_filter( 'woocommerce_gateway_description', 'add_text', 10, 2 );
+add_filter( 'woocommerce_gateway_icon', 'add_icon', 10, 2 );

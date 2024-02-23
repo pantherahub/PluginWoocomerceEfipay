@@ -33,6 +33,7 @@ function woocommerce_efipay_gateway() {
             $this->confirmation_page = $this->get_option('confirmation_page');
             $this->currency = $this->get_option('currency');
             $this->webhook_url = $this->get_option('webhook_url');
+            $this->token = $this->get_option('token');
 
             if (version_compare(WOOCOMMERCE_VERSION, '2.0.0', '>=')) {
                 add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
@@ -75,6 +76,11 @@ function woocommerce_efipay_gateway() {
                     'type' => 'text',
                     'description' => __('Llave que sirve para encriptar la comunicación con Efipay.', 'efipay')
                 ),
+				'token' => array(
+                    'title' => __('Token Efipay', 'efipay'),
+                    'type' => 'text',
+                    'description' => __('Token que sirve para encriptar la comunicación con Efipay.', 'efipay')
+                ),
                 'office_id' => array(
                     'title' => __('Comercio ID', 'efipay'),
                     'type' => 'text',
@@ -108,7 +114,7 @@ function woocommerce_efipay_gateway() {
         }
 
 		public function admin_options() {
-			echo "<div style='text-align: center;'>";
+			echo "<div style='text-align: start;'>";
 			echo "<div style='text-align: center;'>";
 			echo      "<img src=\"" . $this->icon . "\" style='object-fit: cover;width: 200px;'></img>";
 			echo "</div>";
@@ -260,55 +266,56 @@ function woocommerce_efipay_gateway() {
     add_filter('woocommerce_payment_gateways', 'add_efipay');
 }
 
-// En tu plugin de WooCommerce, registra un punto final para el webhook
 add_action('woocommerce_api_efipay_webhook', 'handle_efipay_webhook');
-// deberian ir en una clase
 function handle_efipay_webhook($request) {
+
+	// $computedSignature = hash_hmac('sha256', $request->getContent(), $this->token);
+
 	$body = json_decode($request->get_body(), true);
-    $transaction_data = $body['transaction']; 
+	$transaction_data = $body['transaction']; 
 	$checkout = $body['checkout'];
 
-    if (!isset($transaction_data)) {
-        error_log("No se ha recibido información de la transacción");
-        wp_die("Error interno del servidor", "Error", array(
-            'response' => 500
-        ));
-    }
+	if (!isset($transaction_data)) {
+		error_log("No se ha recibido información de la transacción");
+		wp_die("Error interno del servidor", "Error", array(
+			'response' => 500
+		));
+	}
 
 	$order_id = $checkout['payment_gateway']['advanced_option']['references'][0];
 	if (!isset($order_id)) {
 		die("No se ha recibido información de referencia");
 	}
 
-    try {
-        $order = wc_get_order($order_id);
-        if(!$order){
-            die("No se ha encontrado el pedido");
-        }
+	try {
+		$order = wc_get_order($order_id);
+		if(!$order){
+			die("No se ha encontrado el pedido");
+		}
 
-        switch ($transaction_data['status']) {
-            case 'Aprobada':
-                $order->update_status('completed', __('Pago completado a través de efipay.', 'efipay'));
-                break;
-            case 'pending':
-                $order->update_status('on-hold');
-                break;
-            default:
-                $order->update_status('failed');
-        }
-        
-        $order->add_order_note(__('Efipay transaction details', 'textdomain'));
-        foreach ($transaction_data as $key => $value) {
-            $order->add_order_note(sprintf("%s: %s", $key, $value));
-        }
+		switch ($transaction_data['status']) {
+			case 'Aprobada':
+				$order->update_status('completed', __('Pago completado a través de efipay.', 'efipay'));
+				break;
+			case 'pending':
+				$order->update_status('on-hold');
+				break;
+			default:
+				$order->update_status('failed');
+		}
+		
+		$order->add_order_note(__('Efipay transaction details', 'textdomain'));
+		foreach ($transaction_data as $key => $value) {
+			$order->add_order_note(sprintf("%s: %s", $key, $value));
+		}
 		wp_send_json_success( 'Pago procesado correctamente', 200 );
-    } catch (Exception $e) {
-        add_filter('woocommerce_email_attachments', 'efipay_add_exception_to_emails', 10, 3);
-        wc_add_notice(sprintf(__('Se ha producido un error inesperado. Por favor, contacta con nosotros para más detalles.')));
-        wc_add_notice(sprintf(__('Error procesando el pago: %s', 'textdomain'), $e->getMessage()), 'error');
-        remove_action('woocommerce_thankyou', 'woocommerce_output_thanks');
-        add_action('woocommerce_thankyou', 'custom_thankyou_page');
-    }
+	} catch (Exception $e) {
+		add_filter('woocommerce_email_attachments', 'efipay_add_exception_to_emails', 10, 3);
+		wc_add_notice(sprintf(__('Se ha producido un error inesperado. Por favor, contacta con nosotros para más detalles.')));
+		wc_add_notice(sprintf(__('Error procesando el pago: %s', 'textdomain'), $e->getMessage()), 'error');
+		remove_action('woocommerce_thankyou', 'woocommerce_output_thanks');
+		add_action('woocommerce_thankyou', 'custom_thankyou_page');
+	}
 }
 
 function woocommerce_output_thanks(){
@@ -318,13 +325,9 @@ function woocommerce_output_thanks(){
 function custom_thankyou_page(){
 	wc_get_template('checkout/thankyou.php');
 }
-// deberian ir en una clase
+
 
 add_action( 'rest_api_init', 'register_webhook_route' );
-
-/**
- * Register the webhook route.
- */
 function register_webhook_route() {
 	register_rest_route( 'efipay/v1', '/webhook', array(
 		'methods'  => 'POST',
@@ -356,6 +359,7 @@ function add_text($icon_html, $gateway_id){
 	}
 }
 
+add_filter( 'woocommerce_gateway_description', 'add_text', 10, 2 );
 function add_icon($icon_html, $gateway_id){
 	if ( 'efipay' === $gateway_id ) { 
 		$icon_html = "
@@ -364,5 +368,4 @@ function add_icon($icon_html, $gateway_id){
 		return $icon_html;
 	}
 }
-add_filter( 'woocommerce_gateway_description', 'add_text', 10, 2 );
 add_filter( 'woocommerce_gateway_icon', 'add_icon', 10, 2 );

@@ -335,13 +335,14 @@ function register_webhook_route() {
 	));
 }
 
+// Agrega los estilos personalizados al hook 'wp_enqueue_scripts' para que se carguen en el frontend
+add_action( 'wp_enqueue_scripts', 'style_customized' );
 function style_customized() {
     $ruta_css = plugin_dir_url( __FILE__ ) . 'css/style.css';
     wp_enqueue_style( 'styles', $ruta_css );
 }
 
-// Agrega los estilos personalizados al hook 'wp_enqueue_scripts' para que se carguen en el frontend
-add_action( 'wp_enqueue_scripts', 'style_customized' );
+add_filter( 'woocommerce_gateway_description', 'add_text', 10, 2 );
 
 function add_text($icon_html, $gateway_id){
 	// html icon en description
@@ -359,7 +360,8 @@ function add_text($icon_html, $gateway_id){
 	}
 }
 
-add_filter( 'woocommerce_gateway_description', 'add_text', 10, 2 );
+add_filter( 'woocommerce_gateway_icon', 'add_icon', 10, 2 );
+
 function add_icon($icon_html, $gateway_id){
 	if ( 'efipay' === $gateway_id ) { 
 		$icon_html = "
@@ -368,4 +370,3 @@ function add_icon($icon_html, $gateway_id){
 		return $icon_html;
 	}
 }
-add_filter( 'woocommerce_gateway_icon', 'add_icon', 10, 2 );

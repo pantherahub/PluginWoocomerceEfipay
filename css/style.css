@@ -1,0 +1,6 @@
+
+.payment_method_efipay img[alt=PayPal]{
+	width:160px!important; 
+	height:auto!important;
+	object-fit: cover;
+}

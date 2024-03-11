@@ -208,7 +208,7 @@ function woocommerce_efipay_gateway() {
 				var jsonData = JSON.parse(formData.get("data"));
 
 				var xhr = new XMLHttpRequest();
-				xhr.open("POST", "https://soporte.efipay.co/api/v1/payment/generate-payment");
+				xhr.open("POST", "https://sag.efipay.co/api/v1/payment/generate-payment");
 				xhr.setRequestHeader("Content-Type", "application/json");
 				xhr.setRequestHeader("Authorization", "Bearer ' . $this->api_key . '");
 		

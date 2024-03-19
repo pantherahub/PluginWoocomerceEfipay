@@ -64,7 +64,7 @@ function woocommerce_efipay_gateway() {
             $this->id = 'efipay';
             $this->icon = apply_filters('woocomerce_efipay_icon', plugins_url('/img/logoEfipay.png', __FILE__));
             $this->has_fields = false;
-            $this->method_title = 'Efipay';
+            $this->method_title = 'Efipay (tarjetas debito, credito, pse, efectivos)';
             $this->method_description = 'Integración de Woocommerce a la pasarela de pagos de Efipay';
 
             $this->init_form_fields();

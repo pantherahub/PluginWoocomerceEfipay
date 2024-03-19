@@ -269,7 +269,7 @@ function woocommerce_efipay_gateway() {
 				// Obtener el objeto de datos JSON
 				var jsonData = JSON.parse(formData.get("data"));
 		
-				fetch("https://efipay-sag.redpagos.co/api/v1/payment/generate-payment", {
+				fetch("https://sag.efipay.co/api/v1/payment/generate-payment", {
 					method: "POST",
 					headers: {
 						"Content-Type": "application/json",

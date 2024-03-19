@@ -280,7 +280,7 @@ function woocommerce_efipay_gateway() {
 				})
 				.then(response => {
 					if (!response.ok) {
-						throw new Error("Error en la respuesta del servidor: " + response.statusText );
+						throw new Error("Error en la respuesta del servidor, revisa tu configuración de pagos o comunicate con soporte@efipay.co");
 					}
 					return response.json();
 				})
@@ -289,8 +289,8 @@ function woocommerce_efipay_gateway() {
 						// Redirigir al usuario a la URL devuelta en la respuesta
 						window.open(data.url);
 					} else {
-						alert('Error en la respuesta del servidor');
-						console.error("Error en la respuesta del servidor");
+						alert('Error en la respuesta del servidor, revisa tu configuración de pagos o comunicate con soporte@efipay.co');
+						console.error("Error en la respuesta del servidor, revisa tu configuración de pagos o comunicate con soporte@efipay.co");
 					}
 				})
 				.catch(error => {

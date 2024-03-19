@@ -8,6 +8,52 @@ Author: Efipay
 Author URI: http://www.efipay.com/
 */
 
+
+
+function declare_cart_checkout_blocks_compatibility() {
+    // Check if the required class exists
+    if (class_exists('\Automattic\WooCommerce\Utilities\FeaturesUtil')) {
+        // Declare compatibility for 'cart_checkout_blocks'
+        \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('cart_checkout_blocks', __FILE__, true);
+    }
+}
+// Hook the custom function to the 'before_woocommerce_init' action
+add_action('before_woocommerce_init', 'declare_cart_checkout_blocks_compatibility');
+
+
+// Hook the custom function to the 'woocommerce_blocks_loaded' action
+add_action( 'woocommerce_blocks_loaded', 'oawoo_register_order_approval_payment_method_type' );
+
+/**
+ * Custom function to register a payment method type
+
+ */
+function oawoo_register_order_approval_payment_method_type() {
+    // Check if the required class exists
+    if ( ! class_exists( 'Automattic\WooCommerce\Blocks\Payments\Integrations\AbstractPaymentMethodType' ) ) {
+        return;
+    }
+
+    // Include the custom Blocks Checkout class
+    require_once plugin_dir_path(__FILE__) . 'class-block.php';
+
+    // Hook the registration function to the 'woocommerce_blocks_payment_method_type_registration' action
+    add_action(
+        'woocommerce_blocks_payment_method_type_registration',
+        function( Automattic\WooCommerce\Blocks\Payments\PaymentMethodRegistry $payment_method_registry ) {
+            // Register an instance of My_Custom_Gateway_Blocks
+			$efipay_instance = new WC_Efipay();
+			add_filter('woocommerce_payment_gateways', function ($methods) use ($efipay_instance) {
+				$methods[] = $efipay_instance;
+				return $methods;
+			});
+
+            $payment_method_registry->register( new Efipay_Blocks($efipay_instance) );
+        }
+    );
+}
+
+
 add_action('plugins_loaded', 'woocommerce_efipay_gateway', 0);
 
 function woocommerce_efipay_gateway() {
@@ -18,7 +64,7 @@ function woocommerce_efipay_gateway() {
             $this->id = 'efipay';
             $this->icon = apply_filters('woocomerce_efipay_icon', plugins_url('/img/logoEfipay.png', __FILE__));
             $this->has_fields = false;
-            $this->method_title = 'Efipay';
+            $this->method_title = 'Efipay (tarjetas debito, credito, pse, efectivos)';
             $this->method_description = 'Integración de Woocommerce a la pasarela de pagos de Efipay';
 
             $this->init_form_fields();
@@ -124,12 +170,15 @@ function woocommerce_efipay_gateway() {
 		}
 
         public function receipt_page($order) {
+			
 			$order =  wc_get_order($order);
-			echo "<div style='text-align: center;'>";
-			echo     "<img src=\"" . $this->icon . "\" style='object-fit: cover;width: 200px;'></img>";
-			echo "</div>";
-            echo '<p>' . __('Gracias por su pedido, haga clic en el botón para continuar el pago con Efipay.', 'efipay') . '</p>';
-            echo $this->generate_efipay_form($order);
+			if($order){
+				echo "<div style='text-align: center;'>";
+				echo     "<img src=\"" . $this->icon . "\" style='object-fit: cover;width: 200px;'></img>";
+				echo "</div>";
+				echo '<p>' . __('Gracias por su pedido, haga clic en el botón para continuar el pago con Efipay.', 'efipay') . '</p>';
+				echo $this->generate_efipay_form($order);
+			}
         }
 
 		public function get_params_post($order_id): array {
@@ -176,9 +225,12 @@ function woocommerce_efipay_gateway() {
 			$data = json_encode($parameters_args);
 		
 			// Construir el formulario de pago
-			$form_html = '<form id="efipay_form">
-				<input type="hidden" name="data" value="' . htmlentities($data) . '">
-				<input type="submit" id="submit_efipay" value="' . __('Pagar', 'efipay') . '" style="
+			ob_start();
+			?>
+			<form id="efipay_form">
+				<?php wp_nonce_field( 'efipay_form_submit', '_efipay_nonce' ); ?>
+				<input type="hidden" name="data" value="<?php echo htmlentities($data); ?>">
+				<input type="submit" id="submit_efipay" value="<?php echo esc_html__('Pagar', 'efipay'); ?>" style="
 					background-color: #4CAF50;
 					color: white;
 					padding: 12px 20px;
@@ -194,43 +246,63 @@ function woocommerce_efipay_gateway() {
 					width: 100%;
 					box-sizing: border-box;
 				">
-			</form>';
+			</form>
+			<?php
+			$form_html = ob_get_clean();
 		
 			// Agregar un script JavaScript para manejar el envío del formulario
-			$script = '<script>
+			ob_start();
+			?>
+			<script>
 			document.getElementById("efipay_form").addEventListener("submit", function(event) {
 				event.preventDefault();
+		
+				// Obtener el token CSRF del formulario
+				var csrfToken = document.querySelector('input[name="_efipay_nonce"]').value;
 		
 				// Obtener los datos del formulario
 				var formData = new FormData(this);
 		
+				// Agregar el token CSRF a los datos del formulario
+				formData.append("_efipay_nonce", csrfToken);
+		
 				// Obtener el objeto de datos JSON
 				var jsonData = JSON.parse(formData.get("data"));
-
-				var xhr = new XMLHttpRequest();
-				xhr.open("POST", "https://sag.efipay.co/api/v1/payment/generate-payment");
-				xhr.setRequestHeader("Content-Type", "application/json");
-				xhr.setRequestHeader("Authorization", "Bearer ' . $this->api_key . '");
 		
-				xhr.onload = function() {
-					if (xhr.status >= 200 && xhr.status < 300) {
-						var response = JSON.parse(xhr.responseText);
-						if (response.saved) {
-							// Redirigir al usuario a la URL devuelta en la respuesta
-							window.open(response.url)
-						} else {
-							console.error("Error en la respuesta del servidor");
-						}
-					} else {
-						console.error(xhr.statusText);
+				fetch("https://sag.efipay.co/api/v1/payment/generate-payment", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"Accept": "application/json",
+						"Authorization": "Bearer <?php echo esc_js($this->api_key); ?>"
+					},
+					body: JSON.stringify(jsonData)
+				})
+				.then(response => {
+					if (!response.ok) {
+						throw new Error("Error en la respuesta del servidor: " + response.statusText);
 					}
-				};
-				xhr.send(JSON.stringify(jsonData));
+					return response.json();
+				})
+				.then(data => {
+					if (data.saved) {
+						// Redirigir al usuario a la URL devuelta en la respuesta
+						window.open(data.url);
+					} else {
+						console.error("Error en la respuesta del servidor");
+					}
+				})
+				.catch(error => {
+					console.error("Error en la solicitud:", error);
+				});
 			});
-			</script>';
+			</script>
+			<?php
+			$script = ob_get_clean();
 		
 			return $form_html . $script;
 		}
+		
 
 		public function process_payment($order_id) {
             $order = wc_get_order($order_id);
@@ -257,13 +329,7 @@ function woocommerce_efipay_gateway() {
     }
 
 
-    function add_efipay($methods) {
-        $methods[] = 'WC_Efipay';
-        return $methods;
-    }
 
-
-    add_filter('woocommerce_payment_gateways', 'add_efipay');
 }
 
 add_action('woocommerce_api_efipay_webhook', 'handle_efipay_webhook');
@@ -297,7 +363,7 @@ function handle_efipay_webhook($request) {
 			case 'Aprobada':
 				$order->update_status('completed', __('Pago completado a través de efipay.', 'efipay'));
 				break;
-			case 'pending':
+			case 'Pending':
 				$order->update_status('on-hold');
 				break;
 			default:

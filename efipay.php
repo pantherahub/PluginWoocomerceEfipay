@@ -91,11 +91,6 @@ function woocommerce_efipay_gateway() {
 
         }
 
-		public function declare_compatibility() {
-			if (class_exists('\Automattic\WooCommerce\Utilities\FeaturesUtil')) {
-				\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('cart_checkout_blocks', __FILE__, true);
-			}
-		}
 
         public function init_form_fields() {
             $this->form_fields = array(
@@ -128,9 +123,9 @@ function woocommerce_efipay_gateway() {
                     'description' => __('Token que sirve para encriptar la comunicación con Efipay.', 'efipay')
                 ),
                 'office_id' => array(
-                    'title' => __('Comercio ID', 'efipay'),
+                    'title' => __('Sucursal ID', 'efipay'),
                     'type' => 'text',
-                    'description' => __('ID de tu comercio Efipay.', 'efipay')
+                    'description' => __('ID de tu sucursal Efipay.', 'efipay')
                 ),
                 'test' => array(
                     'title' => __('Transacciones en modo de prueba', 'efipay'),
@@ -169,17 +164,14 @@ function woocommerce_efipay_gateway() {
 			echo "</div>";
 		}
 
-        public function receipt_page($order) {
-			
-			$order =  wc_get_order($order);
-			if($order){
-				echo "<div style='text-align: center;'>";
-				echo     "<img src=\"" . $this->icon . "\" style='object-fit: cover;width: 200px;'></img>";
-				echo "</div>";
-				echo '<p>' . __('Gracias por su pedido, haga clic en el botón para continuar el pago con Efipay.', 'efipay') . '</p>';
-				echo $this->generate_efipay_form($order);
+		public function receipt_page($order) {
+			$order = wc_get_order($order);
+			if($order) {
+				// Incluir la vista externa
+				include_once(plugin_dir_path(__FILE__) . 'views/efipay_receipt.php');
 			}
-        }
+		}
+		
 
 		public function get_params_post($order_id): array {
             $order = wc_get_order($order_id);
@@ -217,93 +209,7 @@ function woocommerce_efipay_gateway() {
             return $parameters_args;
         }
 
-		public function generate_efipay_form($order_id) {
-			// Obtener los parámetros para el formulario de pago
-			$parameters_args = $this->get_params_post($order_id);
-		
-			// Construir el objeto de datos para enviar
-			$data = json_encode($parameters_args);
-		
-			// Construir el formulario de pago
-			ob_start();
-			?>
-			<form id="efipay_form">
-				<?php wp_nonce_field( 'efipay_form_submit', '_efipay_nonce' ); ?>
-				<input type="hidden" name="data" value="<?php echo htmlentities($data); ?>">
-				<input type="submit" id="submit_efipay" value="<?php echo esc_html__('Pagar', 'efipay'); ?>" style="
-					background-color: #4CAF50;
-					color: white;
-					padding: 12px 20px;
-					margin: 8px 0;
-					border: none;
-					border-radius: 10px;
-					cursor: pointer;
-					font-size: 16px;
-					text-align: center;
-					text-decoration: none;
-					display: inline-block;
-					transition-duration: 0.4s;
-					width: 100%;
-					box-sizing: border-box;
-				">
-			</form>
-			<?php
-			$form_html = ob_get_clean();
-		
-			// Agregar un script JavaScript para manejar el envío del formulario
-			ob_start();
-			?>
-			<script>
-			document.getElementById("efipay_form").addEventListener("submit", function(event) {
-				event.preventDefault();
-		
-				// Obtener el token CSRF del formulario
-				var csrfToken = document.querySelector('input[name="_efipay_nonce"]').value;
-		
-				// Obtener los datos del formulario
-				var formData = new FormData(this);
-		
-				// Agregar el token CSRF a los datos del formulario
-				formData.append("_efipay_nonce", csrfToken);
-		
-				// Obtener el objeto de datos JSON
-				var jsonData = JSON.parse(formData.get("data"));
-		
-				fetch("https://sag.efipay.co/api/v1/payment/generate-payment", {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						"Accept": "application/json",
-						"Authorization": "Bearer <?php echo esc_js($this->api_key); ?>"
-					},
-					body: JSON.stringify(jsonData)
-				})
-				.then(response => {
-					if (!response.ok) {
-						throw new Error("Error en la respuesta del servidor, revisa tu configuración de pagos o comunicate con soporte@efipay.co");
-					}
-					return response.json();
-				})
-				.then(data => {
-					if (data.saved) {
-						// Redirigir al usuario a la URL devuelta en la respuesta
-						window.open(data.url);
-					} else {
-						alert('Error en la respuesta del servidor, revisa tu configuración de pagos o comunicate con soporte@efipay.co');
-						console.error("Error en la respuesta del servidor, revisa tu configuración de pagos o comunicate con soporte@efipay.co");
-					}
-				})
-				.catch(error => {
-					alert(error);
-					console.error("Error en la solicitud:", error);
-				});
-			});
-			</script>
-			<?php
-			$script = ob_get_clean();
-		
-			return $form_html . $script;
-		}
+
 		
 
 		public function process_payment($order_id) {

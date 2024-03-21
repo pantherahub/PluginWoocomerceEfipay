@@ -219,7 +219,7 @@ $(document).ready(function(){
 
                 showSpinner()
 
-                fetch("https://sag.efipay.co/api/v1/payment/generate-payment", {
+                fetch("http://localhost:8030/api/v1/payment/generate-payment", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -268,7 +268,7 @@ $(document).ready(function(){
                         customer_payer: customerPayer,
                         payment_card: paymentData
                     }
-                    fetch("https://sag.efipay.co/api/v1/payment/transaction-checkout", {
+                    fetch("http://localhost:8030/api/v1/payment/transaction-checkout", {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",

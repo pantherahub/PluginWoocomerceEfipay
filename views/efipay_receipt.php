@@ -110,7 +110,17 @@ $phone = file_get_contents($phone_url);
 
             </div>
 
-                <input type="submit" id="submit_efipay" value="<?php echo esc_html__('Pagar', 'efipay'); ?>" class="btn btn-success w-100" disabled>
+            <div class="position-relative">
+                <button type="submit" id="submit_efipay" class="btn btn-success w-100" disabled>Pagar
+                <div id="spinner" class="spinner-border spinner-border-sm text-white" role="status" style="display: none;">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+
+                </button>
+                
+            </div>
+
+
             </form>
         </div>
     </div>
@@ -126,6 +136,19 @@ $phone = file_get_contents($phone_url);
 
 
 <script>
+
+function showSpinner() {
+    $('#spinner').show();
+    $('#spinner').show();
+    $('#submit_efipay').prop('disabled', true);
+}
+
+function hideSpinner(){
+    $('#spinner').hide();
+    $('#submit_efipay').prop('disabled', false);
+}
+
+
 $(document).ready(function(){
     $('#selectOther').click(function() {
         if(!$('#collapseCreditCard').hasClass('collapsing')){
@@ -194,6 +217,8 @@ $(document).ready(function(){
 
                 if($('#selectCreditCard').is(':checked')){jsonData.payment.checkout_type = "api";}
 
+                showSpinner()
+
                 fetch("http://localhost:8030/api/v1/payment/generate-payment", {
                 method: "POST",
                 headers: {
@@ -213,6 +238,7 @@ $(document).ready(function(){
                 if (data.saved) {
                     // Si es redirect
                     if($('#selectOther').is(':checked')){
+                        hideSpinner()
                      window.location.href = data.url;
                     }
                     else{
@@ -262,12 +288,12 @@ $(document).ready(function(){
                         }
                         return response.json();
                     }).then(async data_payment => {
+                        hideSpinner()
                        await Swal.fire({
                             icon: data_payment.transaction.status === 'Aprobada' ? 'success' : data_payment.transaction.status === 'Rechazada' ? 'error' : 'warning',
                             title: 'Estado',
                             text: 'Estado de la transacción: ' + data_payment.transaction.status + `${data_payment.transaction.status !== 'Aprobada' ? ', Intenta nuevamente' : ''}`,
                         });
-                    
                         if (data_payment.transaction.status === 'Aprobada') {
                             window.location.href = "<?php echo home_url(); ?>";
                         }
@@ -288,6 +314,7 @@ $(document).ready(function(){
                             icon: "error"
                         });
                         console.error("Error en la solicitud:", error);
+                        hideSpinner()
                     });
 
                     }
@@ -300,6 +327,7 @@ $(document).ready(function(){
                                 icon: "error"
                             });
                     console.error("Error en la respuesta del servidor, revisa tu configuración de pagos o comunícate con soporte@efipay.co");
+                    hideSpinner()
                 }
             })
             .catch(error => {
@@ -309,6 +337,7 @@ $(document).ready(function(){
                                 icon: "error"
                             });
                 console.error("Error en la solicitud:", error);
+                hideSpinner()
             });
             }
          else {
@@ -317,6 +346,7 @@ $(document).ready(function(){
                 text: "Por favor, selecciona un método de pago.",
                 icon: "warning"
            });
+         hideSpinner()
         }
     });
 });
@@ -331,11 +361,7 @@ $(document).ready(function(){
         .w-lg-75 {
             width: 75%;
         }
-        .order_details {
-            display: flex;
-            justify-content: center;
-            margin-top: 4rem !important;
-        }
+
     }
 
     input[type=number]{
@@ -344,4 +370,5 @@ $(document).ready(function(){
     input[type=month]{
         min-width: auto !important;        
     }
+    
 </style>

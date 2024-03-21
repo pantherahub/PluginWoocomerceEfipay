@@ -123,9 +123,9 @@ function woocommerce_efipay_gateway() {
                     'description' => __('Token que sirve para encriptar la comunicación con Efipay.', 'efipay')
                 ),
                 'office_id' => array(
-                    'title' => __('Comercio ID', 'efipay'),
+                    'title' => __('Sucursal ID', 'efipay'),
                     'type' => 'text',
-                    'description' => __('ID de tu comercio Efipay.', 'efipay')
+                    'description' => __('ID de tu sucursal Efipay.', 'efipay')
                 ),
                 'test' => array(
                     'title' => __('Transacciones en modo de prueba', 'efipay'),

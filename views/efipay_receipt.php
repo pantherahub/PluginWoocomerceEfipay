@@ -129,13 +129,35 @@ $phone = file_get_contents($phone_url);
 
 
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
-<script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/popper.js@1.12.9/dist/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+<script
+  src="https://code.jquery.com/jquery-3.7.1.min.js"
+  integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
+  crossorigin="anonymous"></script><script src="https://cdn.jsdelivr.net/npm/popper.js@1.12.9/dist/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 
+
+
 <script>
+
+// Ejemplo de función que llama a una función de WooCommerce para vaciar el carrito
+function clearCart() {
+    // Realizar una solicitud AJAX
+    $.ajax({
+        url: '<?php echo admin_url('admin-ajax.php'); ?>',
+        type: 'POST',
+        data: {
+            'action': 'clear_cart_ajax' // Nombre de la acción de WordPress
+        },
+        success: function(response) {
+            console.log('El carrito se ha vaciado correctamente.');
+        },
+        error: function(xhr, status, error) {
+            console.error('Error al vaciar el carrito:', error);
+        }
+    });
+}
 
 function showSpinner() {
     $('#spinner').show();
@@ -212,7 +234,6 @@ $(document).ready(function(){
 
             var formData = new FormData(this);
             var jsonData = JSON.parse(formData.get("data"));
-
             if($('#selectCreditCard').is(':checked') || $('#selectOther').is(':checked')){
 
                 if($('#selectCreditCard').is(':checked')){jsonData.payment.checkout_type = "api";}
@@ -234,11 +255,12 @@ $(document).ready(function(){
                 }
                 return response.json();
             })
-            .then(data => {
+            .then(async data => {
                 if (data.saved) {
                     // Si es redirect
                     if($('#selectOther').is(':checked')){
-                        hideSpinner()
+                     hideSpinner()
+                     await clearCart() 
                      window.location.href = data.url;
                     }
                     else{
@@ -295,6 +317,7 @@ $(document).ready(function(){
                             text: 'Estado de la transacción: ' + data_payment.transaction.status + `${data_payment.transaction.status !== 'Aprobada' ? ', Intenta nuevamente' : ''}`,
                         });
                         if (data_payment.transaction.status === 'Aprobada') {
+                            await clearCart() 
                             window.location.href = "<?php echo home_url(); ?>";
                         }
                     }).catch(error => {

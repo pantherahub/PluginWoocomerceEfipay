@@ -10,6 +10,17 @@ Author URI: http://www.efipay.com/
 
 
 
+function clear_cart_ajax_handler() {
+    // Llamar a la función de WooCommerce para vaciar el carrito
+    if (function_exists('WC')) {
+        WC()->cart->empty_cart();
+        die(); // Terminar el script después de vaciar el carrito
+    }
+}
+add_action('wp_ajax_clear_cart_ajax', 'clear_cart_ajax_handler'); // Para usuarios autenticados
+add_action('wp_ajax_nopriv_clear_cart_ajax', 'clear_cart_ajax_handler'); // Para usuarios no autenticados
+
+
 function declare_cart_checkout_blocks_compatibility() {
     // Check if the required class exists
     if (class_exists('\Automattic\WooCommerce\Utilities\FeaturesUtil')) {

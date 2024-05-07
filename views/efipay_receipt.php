@@ -55,6 +55,38 @@ $phone = file_get_contents($phone_url);
                         <label for="email" class="form-label">Correo</label>
                         <input type="email" class="form-control" id="email" name="email"  >
                     </div>
+
+                    <div class="mb-3">
+                        <label for="address_1" class="form-label">Address 1</label>
+                        <input type="text" class="form-control" id="address_1" name="address_1"  >
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="address_2" class="form-label">Address 2</label>
+                        <input type="text" class="form-control" id="address_2" name="address_2"  >
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="city" class="form-label">City</label>
+                        <input type="text" class="form-control" id="city" name="city"  >
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="state" class="form-label">State</label>
+                        <input type="text" class="form-control" id="state" name="state"  >
+                    </div>
+
+
+                    <div class="mb-3">
+                        <label for=zip_code" class="form-label">Cip Code</label>
+                        <input type="text" class="form-control" id="zip_code" name="zip_code"  >
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="country" class="form-label">Country</label>
+                        <input type="email" class="form-control" id="country" name="country"  >
+                    </div>
+
                     <div class="mb-3 row">
                         <div class="col-lg-6">
                             <label for="payment_card_cvv" class="form-label">CVV</label>
@@ -259,9 +291,9 @@ $(document).ready(function(){
                 if (data.saved) {
                     // Si es redirect
                     if($('#selectOther').is(':checked')){
-                     hideSpinner()
-                     await clearCart() 
-                     window.location.href = data.url;
+                         hideSpinner()
+                         await clearCart()
+                         window.location.href = data.url;
                     }
                     else{
                     // Si es API
@@ -278,7 +310,13 @@ $(document).ready(function(){
                         };
                     var customerPayer = {
                         name: formData.get("name"),
-                        email: formData.get("email")
+                        email: formData.get("email"),
+                        address_1 : formData.get('address_1'),
+                        address_2 : formData.get('address_2'),
+                        city : formData.get('city'),
+                        state : formData.get('state'),
+                        zip_code : formData.get('zip_code'),
+                        country : formData.get('country'),
                     }
                     var payment = {
                         id: data.payment_id,

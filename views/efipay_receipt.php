@@ -11,6 +11,7 @@ $names = file_get_contents($names_url);
 
 $phone_url = 'http://country.io/phone.json';
 $phone = file_get_contents($phone_url);
+
 ?>
 
 <div class="container">
@@ -52,39 +53,40 @@ $phone = file_get_contents($phone_url);
                         <input type="text" class="form-control" id="payment_card_name" name="name"  >
                     </div>
                     <div class="mb-3">
-                        <label for="email" class="form-label">Correo</label>
-                        <input type="email" class="form-control" id="email" name="email"  >
+                        <label for="payment_card_email" class="form-label">Correo</label>
+                        <input type="email" class="form-control" id="payment_card_email" name="email"  >
                     </div>
 
                     <div class="mb-3">
-                        <label for="address_1" class="form-label">Address 1</label>
-                        <input type="text" class="form-control" id="address_1" name="address_1"  >
+                        <label for="payment_card_address_1" class="form-label">Address 1</label>
+                        <input type="text" class="form-control" id="payment_card_address_1" name="address_1"  >
                     </div>
 
                     <div class="mb-3">
-                        <label for="address_2" class="form-label">Address 2</label>
-                        <input type="text" class="form-control" id="address_2" name="address_2"  >
+                        <label for="payment_card_address_2" class="form-label">Address 2</label>
+                        <input type="text" class="form-control" id="payment_card_address_2" name="address_2"  >
                     </div>
 
                     <div class="mb-3">
-                        <label for="city" class="form-label">City</label>
-                        <input type="text" class="form-control" id="city" name="city"  >
+                        <label for="payment_card_city" class="form-label">City</label>
+                        <input type="text" class="form-control" id="payment_card_city" name="city"  >
                     </div>
 
                     <div class="mb-3">
-                        <label for="state" class="form-label">State</label>
-                        <input type="text" class="form-control" id="state" name="state"  >
-                    </div>
-
-
-                    <div class="mb-3">
-                        <label for=zip_code" class="form-label">Cip Code</label>
-                        <input type="text" class="form-control" id="zip_code" name="zip_code"  >
+                        <label for="payment_card_state" class="form-label">State</label>
+                        <input type="text" class="form-control" id="payment_card_state" name="state"  >
                     </div>
 
                     <div class="mb-3">
-                        <label for="country" class="form-label">Country</label>
-                        <input type="email" class="form-control" id="country" name="country"  >
+                        <label for="payment_card_zip_code" class="form-label">Zip Code</label>
+                        <input type="text" class="form-control" id="payment_card_zip_code" name="zip_code"  >
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="payment_card_country" class="form-label">Country</label>
+                        <select class="form-select" id="payment_card_country" name="country" >
+                            <!-- Opciones de indicativo se agregarán aquí dinámicamente -->
+                        </select>
                     </div>
 
                     <div class="mb-3 row">
@@ -218,6 +220,14 @@ $(document).ready(function(){
             $('#payment_card_installments').removeAttr('required');
             $('#payment_card_dialling_code').removeAttr('required');
             $('#payment_card_cellphone').removeAttr('required');
+
+            $('#payment_card_email').removeAttr('required');
+            $('#payment_card_address_1').removeAttr('required');
+            $('#payment_card_address_2').removeAttr('required');
+            $('#payment_card_city').removeAttr('required');
+            $('#payment_card_state').removeAttr('required');
+            $('#payment_card_zip_code').removeAttr('required');
+            $('#payment_card_country').removeAttr('required');
         }
     });
 
@@ -235,6 +245,14 @@ $(document).ready(function(){
             $('#payment_card_installments').attr('required', true);
             $('#payment_card_dialling_code').attr('required', true);
             $('#payment_card_cellphone').attr('required', true);
+
+            $('#payment_card_email').attr('required', true);
+            $('#payment_card_address_1').attr('required', true);
+            $('#payment_card_address_2').attr('required', true);
+            $('#payment_card_city').attr('required', true);
+            $('#payment_card_state').attr('required', true);
+            $('#payment_card_zip_code').attr('required', true);
+            $('#payment_card_country').attr('required', true);
         }
     });
 
@@ -260,6 +278,8 @@ $(document).ready(function(){
     // Establecer las opciones dentro del select
     $('#payment_card_dialling_code').html(selectOptions);
 
+    // optener los countries
+    getCountries()
     document.getElementById("efipay_form").addEventListener("submit", function(event) {
         event.preventDefault();
 
@@ -298,16 +318,16 @@ $(document).ready(function(){
                     else{
                     // Si es API
                     var paymentData = {
-                            number: formData.get("number"),
-                            name: formData.get("name"),
-                            expiration_date: formData.get("expiration_date"),
-                            cvv: formData.get("cvv"),
-                            identification_type: formData.get("identification_type"),
-                            id_number: formData.get("id_number"),
-                            installments: formData.get("installments"),
-                            dialling_code:"+" + formData.get("dialling_code"),
-                            cellphone: formData.get("cellphone")
-                        };
+                        number: formData.get("number"),
+                        name: formData.get("name"),
+                        expiration_date: formData.get("expiration_date"),
+                        cvv: formData.get("cvv"),
+                        identification_type: formData.get("identification_type"),
+                        id_number: formData.get("id_number"),
+                        installments: formData.get("installments"),
+                        dialling_code:"+" + formData.get("dialling_code"),
+                        cellphone: formData.get("cellphone")
+                    };
                     var customerPayer = {
                         name: formData.get("name"),
                         email: formData.get("email"),
@@ -411,6 +431,32 @@ $(document).ready(function(){
         }
     });
 });
+
+function getCountries(){
+    fetch("https://sag.efipay.co/api/v1/resources/get-countries", {
+        method: "GET",
+        headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": "Bearer <?php echo esc_js($this->api_key); ?>"
+        }
+    }).then(async data => {
+        let optionsCountry = ''
+        for (let country in data) {
+            optionsCountry += '<option value="' + data.iso3_code + '">' + data + '</option>';
+        }
+        $('#country').html(optionsCountry);
+
+    }).catch(error => {
+        Swal.fire({
+            title: "Error",
+            text: error,
+            icon: "error"
+        });
+        console.error("Error al obtener los countries:", error);
+        hideSpinner()
+    });
+}
 
 
 </script>

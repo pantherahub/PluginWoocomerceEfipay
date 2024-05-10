@@ -45,14 +45,6 @@ $phone = file_get_contents($phone_url);
                 <div class="collapse mb-3" id="collapseCreditCard">
                 <div class="card card-body">
                     <div class="mb-3">
-                        <label for="payment_card_number" class="form-label">Número de la tarjeta</label>
-                        <input type="number" class="form-control" id="payment_card_number" name="number" aria-describedby="emailHelp" >
-                    </div>
-                    <div class="mb-3">
-                        <label for="payment_card_name" class="form-label">Titular de la tarjeta</label>
-                        <input type="text" class="form-control" id="payment_card_name" name="name"  >
-                    </div>
-                    <div class="mb-3">
                         <label for="payment_card_email" class="form-label">Correo</label>
                         <input type="email" class="form-control" id="payment_card_email" name="email"  >
                     </div>
@@ -67,26 +59,37 @@ $phone = file_get_contents($phone_url);
                         <input type="text" class="form-control" id="payment_card_address_2" name="address_2"  >
                     </div>
 
-                    <div class="mb-3">
-                        <label for="payment_card_city" class="form-label">City</label>
-                        <input type="text" class="form-control" id="payment_card_city" name="city"  >
+                    <div class="mb-3 row">
+                        <div class="col-lg-6">
+                            <label for="payment_card_city" class="form-label">City</label>
+                            <input type="text" class="form-control" id="payment_card_city" name="city"  >
+                        </div>
+                        <div class="col-lg-6">
+                            <label for="payment_card_state" class="form-label">State</label>
+                            <input type="text" class="form-control" id="payment_card_state" name="state"  >
+                        </div>
+                    </div>
+
+                    <div class="mb-3 row">
+                        <div class="col-lg-6">
+                            <label for="payment_card_country" class="form-label">Country</label>
+                            <select class="form-select" id="payment_card_country" name="country" >
+                                <!-- Opciones de countries se agregarán aquí dinámicamente -->
+                            </select>
+                        </div>
+                        <div class="col-lg-6">
+                            <label for="payment_card_zip_code" class="form-label">Zip Code</label>
+                            <input type="text" class="form-control" id="payment_card_zip_code" name="zip_code"  >
+                        </div>
                     </div>
 
                     <div class="mb-3">
-                        <label for="payment_card_state" class="form-label">State</label>
-                        <input type="text" class="form-control" id="payment_card_state" name="state"  >
+                        <label for="payment_card_number" class="form-label">Número de la tarjeta</label>
+                        <input type="number" class="form-control" id="payment_card_number" name="number" aria-describedby="emailHelp" >
                     </div>
-
                     <div class="mb-3">
-                        <label for="payment_card_zip_code" class="form-label">Zip Code</label>
-                        <input type="text" class="form-control" id="payment_card_zip_code" name="zip_code"  >
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="payment_card_country" class="form-label">Country</label>
-                        <select class="form-select" id="payment_card_country" name="country" >
-                            <!-- Opciones de indicativo se agregarán aquí dinámicamente -->
-                        </select>
+                        <label for="payment_card_name" class="form-label">Titular de la tarjeta</label>
+                        <input type="text" class="form-control" id="payment_card_name" name="name"  >
                     </div>
 
                     <div class="mb-3 row">
@@ -174,7 +177,6 @@ $phone = file_get_contents($phone_url);
 
 
 <script>
-
 // Ejemplo de función que llama a una función de WooCommerce para vaciar el carrito
 function clearCart() {
     // Realizar una solicitud AJAX
@@ -433,6 +435,7 @@ $(document).ready(function(){
 });
 
 function getCountries(){
+    showSpinner()
     fetch("https://sag.efipay.co/api/v1/resources/get-countries", {
         method: "GET",
         headers: {
@@ -440,14 +443,21 @@ function getCountries(){
             "Accept": "application/json",
             "Authorization": "Bearer <?php echo esc_js($this->api_key); ?>"
         }
-    }).then(async data => {
-        let optionsCountry = ''
-        for (let country in data) {
-            optionsCountry += '<option value="' + data.iso3_code + '">' + data + '</option>';
+    }).then(response =>{
+        return response.json()
+    }).then(async countries => {
+        hideSpinner()
+        console.log(countries)
+        let optionsCountry = '';
+        for (let countryCode in countries) {
+            const country = countries[countryCode]; // Accede al objeto país utilizando la clave
+            console.log(country);
+            optionsCountry += '<option value="' + country.iso3_code + '">' + country.name + '</option>';
         }
-        $('#country').html(optionsCountry);
+        $('#payment_card_country').html(optionsCountry);
 
     }).catch(error => {
+        hideSpinner()
         Swal.fire({
             title: "Error",
             text: error,
@@ -457,7 +467,6 @@ function getCountries(){
         hideSpinner()
     });
 }
-
 
 </script>
 

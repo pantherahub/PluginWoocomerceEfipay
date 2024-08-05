@@ -105,10 +105,16 @@ function woocommerce_efipay_gateway() {
 
         public function init_form_fields() {
             $this->form_fields = array(
-                'enabled' => array(
-                    'title' => __('Habilitar/Deshabilitar', 'efipay'),
+                // 'enabled' => array(
+                //     'title' => __('Habilitar/Deshabilitar', 'efipay'),
+                //     'type' => 'checkbox',
+                //     'label' => __('Habilita la pasarela de pago Efipay', 'efipay'),
+                //     'default' => 'no'
+                // ),
+                'enabled_embebed' => array(
+                    'title' => __('Habilitar/Deshabilitar Payments Embebed', 'efipay'),
                     'type' => 'checkbox',
-                    'label' => __('Habilita la pasarela de pago Efipay', 'efipay'),
+                    'label' => __('Habilita la opcion de pago incrustado en tu sitio web', 'efipay'),
                     'default' => 'no'
                 ),
                 'title' => array(
@@ -129,7 +135,7 @@ function woocommerce_efipay_gateway() {
                     'description' => __('Llave que sirve para encriptar la comunicación con Efipay.', 'efipay')
                 ),
 				'token' => array(
-                    'title' => __('Token Efipay', 'efipay'),
+                    'title' => __('Efipay Token Weebhooks', 'efipay'),
                     'type' => 'text',
                     'description' => __('Token que sirve para encriptar la comunicación con Efipay.', 'efipay')
                 ),
@@ -138,29 +144,23 @@ function woocommerce_efipay_gateway() {
                     'type' => 'text',
                     'description' => __('ID de tu sucursal Efipay.', 'efipay')
                 ),
-                'test' => array(
-                    'title' => __('Transacciones en modo de prueba', 'efipay'),
-                    'type' => 'checkbox',
-                    'label' => __('Habilita las transacciones en modo de prueba.', 'efipay'),
-                    'default' => 'no'
-                ),
                 'response_page' => array(
                     'title' => __('Página de respuesta'),
                     'type' => 'text',
                     'description' => __('URL de la página mostrada después de finalizar el pago.', 'efipay'),
-                    'default' => __('https://su.dominio.com/response', 'efipay')
+                    'default' => __('https://efipay.co/response', 'efipay')
                 ),
 				'await_page' => array(
                     'title' => __('Página de espera'),
                     'type' => 'text',
                     'description' => __('URL de la página que recibe la respuesta definitiva sobre los pagos.', 'efipay'),
-                    'default' => __('https://su.dominio.com/await', 'efipay')
+                    'default' => __('https://efipay.co/await', 'efipay')
                 ),
                 'confirmation_page' => array(
                     'title' => __('Página de confirmación'),
                     'type' => 'text',
                     'description' => __('URL de la página que recibe la respuesta definitiva sobre los pagos.', 'efipay'),
-                    'default' => __('https://su.dominio.com/confirmation', 'efipay')
+                    'default' => __('https://efipay.co/confirmation', 'efipay')
 				)
             );
         }
@@ -182,7 +182,6 @@ function woocommerce_efipay_gateway() {
 				include_once(plugin_dir_path(__FILE__) . 'views/efipay_receipt.php');
 			}
 		}
-		
 
 		public function get_params_post($order_id): array {
             $order = wc_get_order($order_id);
@@ -221,7 +220,6 @@ function woocommerce_efipay_gateway() {
         }
 
 
-		
 
 		public function process_payment($order_id) {
             $order = wc_get_order($order_id);
@@ -355,3 +353,10 @@ function add_icon($icon_html, $gateway_id){
 		return $icon_html;
 	}
 }
+
+function my_enqueue_scripts() {
+    wp_enqueue_style('bootstrap-css', 'https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css');
+    wp_enqueue_script('bootstrap-js', 'https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js', array('jquery'), null, true);
+    wp_enqueue_script('my-script', get_template_directory_uri() . '/js/my-script.js', array('jquery', 'bootstrap-js'), null, true);
+}
+add_action('wp_enqueue_scripts', 'my_enqueue_scripts');

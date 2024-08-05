@@ -39,7 +39,7 @@ $phone = file_get_contents($phone_url);
 
 <script>
 const apiKey = "<?php echo esc_js($this->api_key); ?>";
-const enabledEmbebed = "<?php echo esc_js($this->enabled_embebed); ?>"
+const enabledEmbebed = "<?php echo esc_js($this->enabled_embebed); ?>";
 // Ejemplo de función que llama a una función de WooCommerce para vaciar el carrito
 function clearCart() {
     // Realizar una solicitud AJAX
@@ -363,7 +363,7 @@ async function getPaymentsAvailable() {
                 </label>
             </div>
         `;
-        if (paymentsAvailable.credit && ) {
+        if (paymentsAvailable.credit && enabledEmbebed === 'yes') {
             paymentsAvailableHtml += `
                 <div class="form-check">
                     <input class="form-check-input" type="radio" name="flexRadioDefault" id="selectCreditCard" aria-expanded="false" aria-controls="collapseCreditCard" checked>
@@ -488,6 +488,21 @@ async function getPaymentsAvailable() {
                     </div>
                 </form>
             `;
+        }else{
+            paymentsAvailableHtml += `
+                <form id="efipay_form">
+                    <?php wp_nonce_field( 'efipay_form_submit', '_efipay_nonce' ); ?>
+                    <input type="hidden" name="data" value="<?php echo htmlentities($data); ?>">
+                    <div class="position-relative">
+                        <button type="submit" id="submit_efipay" class="btn btn-success rounded-pill w-100" disabled>
+                            Pagar
+                            <div id="spinner" class="spinner-border spinner-border-sm text-white" role="status" style="display: none;">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </button>
+                    </div>
+                </form>
+            `
         }
         document.getElementById('payments').innerHTML = paymentsAvailableHtml;
 

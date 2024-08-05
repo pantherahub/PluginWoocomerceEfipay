@@ -82,6 +82,8 @@ function woocommerce_efipay_gateway() {
             $this->init_settings();
 
             $this->title = $this->get_option('title');
+            // payment_embebed
+            $this->enabled_embebed = $this->get_option('enabled_embebed');
             $this->api_key = $this->get_option('api_key');
             $this->office_id = $this->get_option('office_id');
             $this->test = $this->get_option('test') === 'yes';

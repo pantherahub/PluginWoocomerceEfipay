@@ -355,10 +355,10 @@ function add_icon($icon_html, $gateway_id){
 		return $icon_html;
 	}
 }
-
-function my_enqueue_scripts() {
-    wp_enqueue_style('bootstrap-css', 'https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css');
-    wp_enqueue_script('bootstrap-js', 'https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js', array('jquery'), null, true);
-    wp_enqueue_script('my-script', get_template_directory_uri() . '/js/my-script.js', array('jquery', 'bootstrap-js'), null, true);
-}
-add_action('wp_enqueue_scripts', 'my_enqueue_scripts');
+// SE COMENTA ESTA FUNCION PARA VER SI ES LA CAUSANTE DEL PROBLEMA CON EL CLIENTE
+// function my_enqueue_scripts() {
+    // wp_enqueue_style('bootstrap-css', 'https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css');
+    // wp_enqueue_script('bootstrap-js', 'https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js', array('jquery'), null, true);
+    // wp_enqueue_script('my-script', get_template_directory_uri() . '/js/my-script.js', array('jquery', 'bootstrap-js'), null, true);
+// }
+// add_action('wp_enqueue_scripts', 'my_enqueue_scripts');

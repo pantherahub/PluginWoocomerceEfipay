@@ -3,7 +3,7 @@
 Plugin Name: Efipay Gateway Payment WooCommerce 
 Plugin URI: http://www.efipay.com/
 Description: Plugin de integracion entre Wordpress-Woocommerce con Efipay
-Version: 0.01
+Version: 1.0.4.2
 Author: Efipay
 Author URI: http://www.efipay.com/
 */
@@ -81,13 +81,12 @@ function woocommerce_efipay_gateway() {
             $this->init_form_fields();
             $this->init_settings();
 
-            $this->title = $this->get_option('title');
             // payment_embebed
             $this->enabled_embebed = $this->get_option('enabled_embebed');
             $this->api_key = $this->get_option('api_key');
             $this->office_id = $this->get_option('office_id');
             $this->test = $this->get_option('test') === 'yes';
-            $this->response_page = $this->get_option('response_page');
+            $this->rejected_page = $this->get_option('rejected_page');
             $this->await_page = $this->get_option('await_page');
             $this->confirmation_page = $this->get_option('confirmation_page');
             $this->currency = $this->get_option('currency');
@@ -107,23 +106,11 @@ function woocommerce_efipay_gateway() {
 
         public function init_form_fields() {
             $this->form_fields = array(
-                // 'enabled' => array(
-                //     'title' => __('Habilitar/Deshabilitar', 'efipay'),
-                //     'type' => 'checkbox',
-                //     'label' => __('Habilita la pasarela de pago Efipay', 'efipay'),
-                //     'default' => 'no'
-                // ),
                 'enabled_embebed' => array(
                     'title' => __('Habilitar/Deshabilitar Payments Embebed', 'efipay'),
                     'type' => 'checkbox',
                     'label' => __('Habilita la opcion de pago incrustado en tu sitio web', 'efipay'),
                     'default' => 'no'
-                ),
-                'title' => array(
-                    'title' => __('Título', 'efipay'),
-                    'type' => 'text',
-                    'description' => __('Título que el usuario verá durante checkout.', 'efipay'),
-                    'default' => __('Efipay', 'efipay')
                 ),
                 'currency' => array(
                     'title' => __('Moneda', 'efipay'),
@@ -137,32 +124,32 @@ function woocommerce_efipay_gateway() {
                     'description' => __('Llave que sirve para encriptar la comunicación con Efipay.', 'efipay')
                 ),
 				'token' => array(
-                    'title' => __('Efipay Token Weebhooks', 'efipay'),
+                    'title' => __('Token weebhook', 'efipay'),
                     'type' => 'text',
                     'description' => __('Token que sirve para encriptar la comunicación con Efipay.', 'efipay')
                 ),
                 'office_id' => array(
-                    'title' => __('Sucursal ID', 'efipay'),
+                    'title' => __('Id Sucursal/Oficina', 'efipay'),
                     'type' => 'text',
                     'description' => __('ID de tu sucursal Efipay.', 'efipay')
                 ),
-                'response_page' => array(
-                    'title' => __('Página de respuesta'),
+                'rejected_page' => array(
+                    'title' => __('Página redirección de rechazo'),
                     'type' => 'text',
-                    'description' => __('URL de la página mostrada después de finalizar el pago.', 'efipay'),
-                    'default' => __('https://efipay.co/response', 'efipay')
+                    'description' => __('URL de la página que recibe la respuesta cuándo la transacción no fue exitosa; fue rechazada por algún motivo (falta de fondos, error, etc.).', 'efipay'),
+                    'default' => __('https://efipay.co/failed', 'efipay')
                 ),
 				'await_page' => array(
-                    'title' => __('Página de espera'),
+                    'title' => __('Página redirección de estado pendiente'),
                     'type' => 'text',
-                    'description' => __('URL de la página que recibe la respuesta definitiva sobre los pagos.', 'efipay'),
+                    'description' => __('La transacción está en proceso, aún no se ha completado ni confirmado.', 'efipay'),
                     'default' => __('https://efipay.co/await', 'efipay')
                 ),
                 'confirmation_page' => array(
-                    'title' => __('Página de confirmación'),
+                    'title' => __('Página redirección de confirmación'),
                     'type' => 'text',
-                    'description' => __('URL de la página que recibe la respuesta definitiva sobre los pagos.', 'efipay'),
-                    'default' => __('https://efipay.co/confirmation', 'efipay')
+                    'description' => __('URL de la página que recibe la respuesta cuándo la transacción fue validada y aprobada con éxito.', 'efipay'),
+                    'default' => __('https://efipay.co/approved', 'efipay')
 				)
             );
         }
@@ -209,7 +196,7 @@ function woocommerce_efipay_gateway() {
 					],
 					"result_urls" => [
 						"approved" => $this->confirmation_page,
-						"rejected" => $this->response_page,
+						"rejected" => $this->rejected_page,
 						"pending" => $this->await_page,
 						"webhook" => home_url().'/wp-json/efipay/v1/webhook'
 					],

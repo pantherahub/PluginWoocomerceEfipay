@@ -3,7 +3,7 @@
 Plugin Name: Efipay Gateway Payment WooCommerce 
 Plugin URI: http://www.efipay.com/
 Description: Plugin de integracion entre Wordpress-Woocommerce con Efipay
-Version: 1.0.4.2
+Version: 1.0.4.3
 Author: Efipay
 Author URI: http://www.efipay.com/
 */
@@ -269,9 +269,15 @@ function handle_efipay_webhook($request) {
 			case 'Aprobada':
 				$order->update_status('completed', __('Pago completado a través de efipay.', 'efipay'));
 				break;
-			case 'Pending':
+			case 'Iniciada':
+            case 'Pendiente':
+            case 'Por Pagar':
 				$order->update_status('on-hold');
 				break;
+            case 'Reversada':
+            case 'Reversion Escalada':
+                $order->update_status('refunded');
+                break;
 			default:
 				$order->update_status('failed');
 		}

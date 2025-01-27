@@ -1,11 +1,11 @@
 <?php
 /*
 Plugin Name: Efipay Gateway Payment WooCommerce 
-Plugin URI: http://www.efipay.com/
+Plugin URI: https://sag.efipay.co/docs/1.0/overview
 Description: Plugin de integracion entre Wordpress-Woocommerce con Efipay
 Version: 1.0.4.3
 Author: Efipay
-Author URI: http://www.efipay.com/
+Author URI: https://efipay.co
 */
 
 
@@ -34,6 +34,15 @@ add_action('before_woocommerce_init', 'declare_cart_checkout_blocks_compatibilit
 
 // Hook the custom function to the 'woocommerce_blocks_loaded' action
 add_action( 'woocommerce_blocks_loaded', 'oawoo_register_order_approval_payment_method_type' );
+
+
+// Hook para agregar enlace de ajustes en la vista de plugins
+add_filter('plugin_action_links_' . plugin_basename(__FILE__), 'plugin_add_link_settings');
+function plugin_add_link_settings($links) {
+    $settings_link = '<a href="admin.php?page=wc-settings&tab=checkout&section=efipay">Ajustes</a>';
+    array_unshift($links, $settings_link);
+    return $links;
+}
 
 /**
  * Custom function to register a payment method type
@@ -85,7 +94,6 @@ function woocommerce_efipay_gateway() {
             $this->enabled_embebed = $this->get_option('enabled_embebed');
             $this->api_key = $this->get_option('api_key');
             $this->office_id = $this->get_option('office_id');
-            $this->test = $this->get_option('test') === 'yes';
             $this->rejected_page = $this->get_option('rejected_page');
             $this->await_page = $this->get_option('await_page');
             $this->confirmation_page = $this->get_option('confirmation_page');
@@ -137,19 +145,16 @@ function woocommerce_efipay_gateway() {
                     'title' => __('Página redirección de rechazo'),
                     'type' => 'text',
                     'description' => __('URL de la página que recibe la respuesta cuándo la transacción no fue exitosa; fue rechazada por algún motivo (falta de fondos, error, etc.).', 'efipay'),
-                    'default' => __('https://efipay.co/failed', 'efipay')
                 ),
 				'await_page' => array(
                     'title' => __('Página redirección de estado pendiente'),
                     'type' => 'text',
                     'description' => __('La transacción está en proceso, aún no se ha completado ni confirmado.', 'efipay'),
-                    'default' => __('https://efipay.co/await', 'efipay')
                 ),
                 'confirmation_page' => array(
                     'title' => __('Página redirección de confirmación'),
                     'type' => 'text',
                     'description' => __('URL de la página que recibe la respuesta cuándo la transacción fue validada y aprobada con éxito.', 'efipay'),
-                    'default' => __('https://efipay.co/approved', 'efipay')
 				)
             );
         }
@@ -181,10 +186,9 @@ function woocommerce_efipay_gateway() {
                 $description = substr($description, 0, 240) . ' y otros...';
             }
 
-            $test = $this->test ? 1 : 0;
 			$parameters_args = [
-				"payment"  => [
-					"description" => 'Pago Plugin Woocommerce',
+				"payment" => [
+					"description" => 'Pago del pedido Woocommerce: '.$order->id,
 					"amount" => $amount,
 					"currency_type" => $currency,
 					"checkout_type" => "redirect"
@@ -192,7 +196,9 @@ function woocommerce_efipay_gateway() {
 				"advanced_options" => [
 					"limit_date" => date('Y-m-d', strtotime('+1 day')),
 					"references" => [
-						"".$order->id.""
+						"".$order->id."",
+                        $order->get_billing_email(),
+                        "Plugin Woocomerce"
 					],
 					"result_urls" => [
 						"approved" => $this->confirmation_page,

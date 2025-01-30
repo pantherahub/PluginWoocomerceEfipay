@@ -83,7 +83,13 @@ function generatePayment(type, data) {
         })
         .then(response => {
             if (!response.ok) {
-                throw new Error("Error en la respuesta del servidor, revisa tu configuración de pagos o comunícate con soporte@efipay.co");
+                if (response.status === 422) {
+                    return response.json().then(errorData => {
+                        throw new Error(JSON.stringify(errorData));
+                    });
+                } else {                
+                    throw new Error("Error en la respuesta del servidor, revisa tu configuración de pagos o comunícate con soporte@efipay.co");
+                }
             }
             return response.json();
         })
@@ -189,12 +195,21 @@ function generatePayment(type, data) {
             }
         })
         .catch(error => {
+            let html = '<ul>';
+            if(typeof JSON.parse(error.message) === "object"){
+                for (const prop in JSON.parse(error.message)) {
+                html += '<li>' + JSON.parse(error.message)[prop] + '</li>';
+                }
+                html += '</ul>';
+            }
+
             Swal.fire({
                 title: "Error",
-                text: error,
+                text: typeof JSON.parse(error.message) === "object" ? ""  : error,
+                html: typeof JSON.parse(error.message) === "object" ? html  : "",
                 icon: "error"
             });
-            console.error("Error en la solicitud:", error);
+            
             hideSpinner()
         });
     } else {

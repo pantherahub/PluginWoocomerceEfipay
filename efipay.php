@@ -203,12 +203,12 @@ function woocommerce_efipay_gateway() {
                         $order->get_billing_email(),
                         "Plugin Woocomerce"
 					],
-					"result_urls" => [
+					"result_urls" => array_filter([
 						"approved" => $this->confirmation_page,
 						"rejected" => $this->rejected_page,
 						"pending" => $this->await_page,
 						"webhook" => home_url().'/wp-json/efipay/v1/webhook'
-					],
+					]),
 					"has_comments" => true,
 					"comments_label" => "Aqui tu comentario"
 				],

@@ -3,7 +3,7 @@
 Plugin Name: Efipay Gateway Payment WooCommerce 
 Plugin URI: https://sag.efipay.co/docs/1.0/overview
 Description: Plugin de integracion entre Wordpress-Woocommerce con Efipay
-Version: 1.0.4.4
+Version: 2.0.0
 Author: Efipay
 Author URI: https://efipay.co
 */
@@ -62,19 +62,22 @@ function oawoo_register_order_approval_payment_method_type() {
         'woocommerce_blocks_payment_method_type_registration',
         function( Automattic\WooCommerce\Blocks\Payments\PaymentMethodRegistry $payment_method_registry ) {
             // Register an instance of My_Custom_Gateway_Blocks
-			$efipay_instance = new WC_Efipay();
-			add_filter('woocommerce_payment_gateways', function ($methods) use ($efipay_instance) {
-				$methods[] = $efipay_instance;
-				return $methods;
-			});
-
-            $payment_method_registry->register( new Efipay_Blocks($efipay_instance) );
+            if (class_exists('WC_Efipay')) {
+                $efipay_instance = new WC_Efipay();
+                $payment_method_registry->register( new Efipay_Blocks($efipay_instance) );
+            }
         }
     );
 }
 
 
-add_action('plugins_loaded', 'woocommerce_efipay_gateway', 0);
+add_filter('woocommerce_payment_gateways', 'agregar_efipay_gateway');
+function agregar_efipay_gateway($methods) {
+    $methods[] = 'WC_Efipay';
+    return $methods;
+}
+
+add_action('woocommerce_loaded', 'woocommerce_efipay_gateway');
 
 function woocommerce_efipay_gateway() {
     if (!class_exists('WC_Payment_Gateway')) return;

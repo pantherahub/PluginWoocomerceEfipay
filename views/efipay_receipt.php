@@ -14,28 +14,21 @@ $phone = file_get_contents($phone_url);
 
 ?>
 
-<div class="container">
+
+<div class="py-5 px-4 efipay-container-payment-methods">
     <div class="text-center">
-        <img class="mb-3" src="<?php echo esc_url($this->icon); ?>" style='object-fit: cover;width: 200px;'></img>
+        <img class="mb-3 efipay-logo" src="<?php echo esc_url($this->icon); ?>"></img>
     </div>
-
-
-    <div class="w-100 d-flex justify-content-center">
-        <div class="w-lg-75 card p-3" id="payments">
-           
-        </div>
+    
+    <div id="efipayPaymentsContainerForms">
+        
     </div>
-
 </div>
 
-
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
-<script
-  src="https://code.jquery.com/jquery-3.7.1.min.js"
-  integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
-  crossorigin="anonymous"></script><script src="https://cdn.jsdelivr.net/npm/popper.js@1.12.9/dist/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<link rel="stylesheet" href="<?php echo plugins_url('../css/bootstrap.min.css', __FILE__); ?>">
+<script src="<?php echo plugins_url('../js/jquery-3.7.1.min.js', __FILE__); ?>"></script>
+<script src="<?php echo plugins_url('../js/bootstrap.bundle.min.js', __FILE__); ?>"></script>
+<script src="<?php echo plugins_url('../js/sweetalert2@11.js', __FILE__); ?>"></script>
 
 <script>
 const apiKey = "<?php echo esc_js($this->api_key); ?>";
@@ -73,39 +66,153 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function generatePayment(type, data) {
+    if(type === "api") data.payment.checkout_type = "api"
+    
+    if(['redirect', 'api'].includes(type)){
+        showSpinner()
+
+        fetch("https://sag.efipay.co/api/v1/payment/generate-payment", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Authorization": "Bearer <?php echo esc_js($this->api_key); ?>"
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error("Error en la respuesta del servidor, revisa tu configuración de pagos o comunícate con soporte@efipay.co");
+            }
+            return response.json();
+        })
+        .then(async data => {
+            if (data.saved) {
+                // Si es redirect
+                if(type === "redirect"){
+                    hideSpinner()
+                    await clearCart()
+                    window.location.href = data.url;
+                } else {
+                    // Si es API
+                    var paymentData = {
+                        number: $("#payment_card_number").val(),
+                        name: $("#payment_card_name").val(),
+                        expiration_date: $('#payment_card_expiration_date').val(),
+                        cvv: $('#payment_card_cvv').val(),
+                        identification_type: $('#payment_card_identification_type').val(),
+                        id_number: $('#payment_card_id_number').val(),
+                        installments: $('#payment_card_installments').val(),
+                        dialling_code:"+" + $('#payment_card_dialling_code').val(),
+                        cellphone: $('#payment_card_cellphone').val(),
+                    };
+                    var customerPayer = {
+                        name: $("#payment_card_name").val(),
+                        email: $('#payment_card_email').val(),
+                        address_1: $('#payment_card_address_1').val(),
+                        address_2: $('#payment_card_address_2').val(),
+                        city: $('#payment_card_city').val(),
+                        state: $('#payment_card_state').val(),
+                        zip_code: $('#payment_card_zip_code').val(),
+                        country: $('#payment_card_country').val(),
+                    }
+                    var payment = {
+                        id: data.payment_id,
+                        token: data.token,
+                    }
+
+                    var send_data = {
+                        payment: payment,
+                        customer_payer: customerPayer,
+                        payment_card: paymentData
+                    }
+
+                    fetch("https://sag.efipay.co/api/v1/payment/transaction-checkout", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json",
+                            "Authorization": "Bearer <?php echo esc_js($this->api_key); ?>"
+                        },
+                        body: JSON.stringify(send_data)
+                    }).then(response => {
+                        if (!response.ok) {
+                            if (response.status === 422) {
+                                return response.json().then(errorData => {
+                                    throw new Error(JSON.stringify(errorData.errors));
+                                });
+                            } else {
+                                throw new Error("Error en la respuesta del servidor, revisa tu configuración de pagos o comunícate con soporte@efipay.co");
+                            }
+                        }
+                        return response.json();
+                    }).then(async data_payment => {
+                        hideSpinner()
+                        await Swal.fire({
+                            icon: data_payment.transaction.status === 'Aprobada' ? 'success' : data_payment.transaction.status === 'Rechazada' ? 'error' : 'warning',
+                            title: 'Estado',
+                            text: 'Estado de la transacción: ' + data_payment.transaction.status + `${data_payment.transaction.status !== 'Aprobada' ? ', Intenta nuevamente' : ''}`,
+                        });
+                        if (data_payment.transaction.status === 'Aprobada') {
+                            await clearCart() 
+                            window.location.href = "<?php echo home_url(); ?>";
+                        }
+                    }).catch(error => {
+
+                        let html = '<ul>';
+                        if(typeof JSON.parse(error.message) === "object"){
+                            for (const prop in JSON.parse(error.message)) {
+                            html += '<li>' + JSON.parse(error.message)[prop] + '</li>';
+                            }
+                            html += '</ul>';
+                        }
+
+                        Swal.fire({
+                            title: "Error",
+                            text: typeof JSON.parse(error.message) === "object" ? ""  : error,
+                            html: typeof JSON.parse(error.message) === "object" ? html  : "",
+                            icon: "error"
+                        });
+                        console.error("Error en la solicitud:", error);
+                        hideSpinner()
+                    });
+                }
+            } else {
+                Swal.fire({
+                    title: "Error",
+                    text: "Error en la respuesta del servidor, revisa tu configuración de pagos o comunícate con soporte@efipay.co",
+                    icon: "error"
+                });
+                console.error("Error en la respuesta del servidor, revisa tu configuración de pagos o comunícate con soporte@efipay.co");
+                hideSpinner()
+            }
+        })
+        .catch(error => {
+            Swal.fire({
+                title: "Error",
+                text: error,
+                icon: "error"
+            });
+            console.error("Error en la solicitud:", error);
+            hideSpinner()
+        });
+    } else {
+        Swal.fire({
+            title: "",
+            text: "Por favor, selecciona un método de pago.",
+            icon: "warning"
+        });
+        hideSpinner()
+    }
+}
+
 $(document).ready(async function(){
     await getPaymentsAvailable()
     await sleep(2000);
-    $('#selectOther').click(function() {
-        console.log('event Success')
-        if(!$('#collapseCreditCard').hasClass('collapsing')){
-            $('#collapseCreditCard').collapse('hide');
-            $('#submit_efipay').prop('disabled', false);
-            // Quitar los atributos required de los campos de tarjeta de crédito
-            $('#payment_card_number').removeAttr('required');
-            $('#payment_card_name').removeAttr('required');
-            $('#payment_card_cvv').removeAttr('required');
-            $('#payment_card_expiration_date').removeAttr('required');
-            $('#payment_card_identification_type').removeAttr('required');
-            $('#payment_card_id_number').removeAttr('required');
-            $('#payment_card_installments').removeAttr('required');
-            $('#payment_card_dialling_code').removeAttr('required');
-            $('#payment_card_cellphone').removeAttr('required');
 
-            $('#payment_card_email').removeAttr('required');
-            $('#payment_card_address_1').removeAttr('required');
-            $('#payment_card_address_2').removeAttr('required');
-            $('#payment_card_city').removeAttr('required');
-            $('#payment_card_state').removeAttr('required');
-            $('#payment_card_zip_code').removeAttr('required');
-            $('#payment_card_country').removeAttr('required');
-        }
-    });
-
-    $('#selectCreditCard').click(function() {
-        console.log('event Success')
-        if (!$('#collapseCreditCard').hasClass('show') && !$('#collapseCreditCard').hasClass('collapsing')) {
-            $('#collapseCreditCard').collapse('show');
+    $('#efipaySelectCreditCard').click(function() {
+        if ($('#efipayCollapseCreditCard').hasClass('show') || $('#efipayCollapseCreditCard').hasClass('collapsing')) {
             $('#submit_efipay').prop('disabled', false);
             // Agregar los atributos required a los campos de tarjeta de crédito
             $('#payment_card_number').attr('required', true);
@@ -144,7 +251,6 @@ $(document).ready(async function(){
     for (var code in sortedCountries) {
         var countryName = sortedCountries[code];
         var dialingCode = phoneCodes[code];
-        console.log(code)
         selectOptions += '<option value="' + dialingCode + '">' + '(+' + dialingCode + ') ' + countryName + '</option>';
     }
 
@@ -153,156 +259,6 @@ $(document).ready(async function(){
 
     // optener los countries
     getCountries()
-    document.getElementById("efipay_form").addEventListener("submit", function(event) {
-        event.preventDefault();
-
-
-            var formData = new FormData(this);
-            var jsonData = JSON.parse(formData.get("data"));
-            if($('#selectCreditCard').is(':checked') || $('#selectOther').is(':checked')){
-
-                if($('#selectCreditCard').is(':checked')){jsonData.payment.checkout_type = "api";}
-
-                showSpinner()
-
-                fetch("https://sag.efipay.co/api/v1/payment/generate-payment", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                    "Authorization": "Bearer <?php echo esc_js($this->api_key); ?>"
-                },
-                body: JSON.stringify(jsonData)
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error("Error en la respuesta del servidor, revisa tu configuración de pagos o comunícate con soporte@efipay.co");
-                }
-                return response.json();
-            })
-            .then(async data => {
-                if (data.saved) {
-                    // Si es redirect
-                    if($('#selectOther').is(':checked')){
-                        hideSpinner()
-                        await clearCart()
-                        window.location.href = data.url;
-                    }
-                    else{
-                    // Si es API
-                    var paymentData = {
-                        number: formData.get("number"),
-                        name: formData.get("name"),
-                        expiration_date: formData.get("expiration_date"),
-                        cvv: formData.get("cvv"),
-                        identification_type: formData.get("identification_type"),
-                        id_number: formData.get("id_number"),
-                        installments: formData.get("installments"),
-                        dialling_code:"+" + formData.get("dialling_code"),
-                        cellphone: formData.get("cellphone")
-                    };
-                    var customerPayer = {
-                        name: formData.get("name"),
-                        email: formData.get("email"),
-                        address_1 : formData.get('address_1'),
-                        address_2 : formData.get('address_2'),
-                        city : formData.get('city'),
-                        state : formData.get('state'),
-                        zip_code : formData.get('zip_code'),
-                        country : formData.get('country'),
-                    }
-                    var payment = {
-                        id: data.payment_id,
-                        token: data.token,
-                    }
-
-                    var send_data = {
-                        payment: payment,
-                        customer_payer: customerPayer,
-                        payment_card: paymentData
-                    }
-                    fetch("https://sag.efipay.co/api/v1/payment/transaction-checkout", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "Accept": "application/json",
-                            "Authorization": "Bearer <?php echo esc_js($this->api_key); ?>"
-                        },
-                        body: JSON.stringify(send_data)
-                    }).then(response => {
-                        if (!response.ok) {
-                            if (response.status === 422) {
-                                return response.json().then(errorData => {
-                                    throw new Error(JSON.stringify(errorData.errors));
-                                });
-                            } else {
-                                throw new Error("Error en la respuesta del servidor, revisa tu configuración de pagos o comunícate con soporte@efipay.co");
-                            }
-                        }
-                        return response.json();
-                    }).then(async data_payment => {
-                        hideSpinner()
-                       await Swal.fire({
-                            icon: data_payment.transaction.status === 'Aprobada' ? 'success' : data_payment.transaction.status === 'Rechazada' ? 'error' : 'warning',
-                            title: 'Estado',
-                            text: 'Estado de la transacción: ' + data_payment.transaction.status + `${data_payment.transaction.status !== 'Aprobada' ? ', Intenta nuevamente' : ''}`,
-                        });
-                        if (data_payment.transaction.status === 'Aprobada') {
-                            await clearCart() 
-                            window.location.href = "<?php echo home_url(); ?>";
-                        }
-                    }).catch(error => {
-
-                        let html = '<ul>';
-                        if(typeof JSON.parse(error.message) === "object"){
-                            for (const prop in JSON.parse(error.message)) {
-                            html += '<li>' + JSON.parse(error.message)[prop] + '</li>';
-                            }
-                            html += '</ul>';
-                        }
-
-                        Swal.fire({
-                            title: "Error",
-                            text: typeof JSON.parse(error.message) === "object" ? ""  : error,
-                            html: typeof JSON.parse(error.message) === "object" ? html  : "",
-                            icon: "error"
-                        });
-                        console.error("Error en la solicitud:", error);
-                        hideSpinner()
-                    });
-
-                    }
-                    
-
-                } else {
-                    Swal.fire({
-                                title: "Error",
-                                text: "Error en la respuesta del servidor, revisa tu configuración de pagos o comunícate con soporte@efipay.co",
-                                icon: "error"
-                            });
-                    console.error("Error en la respuesta del servidor, revisa tu configuración de pagos o comunícate con soporte@efipay.co");
-                    hideSpinner()
-                }
-            })
-            .catch(error => {
-                Swal.fire({
-                                title: "Error",
-                                text: error,
-                                icon: "error"
-                            });
-                console.error("Error en la solicitud:", error);
-                hideSpinner()
-            });
-            }
-         else {
-            Swal.fire({
-                title: "",
-                text: "Por favor, selecciona un método de pago.",
-                icon: "warning"
-           });
-         hideSpinner()
-        }
-    });
 });
 
 function getCountries(){
@@ -356,164 +312,159 @@ async function getPaymentsAvailable() {
     .then(paymentsAvailable => {
         hideSpinner();
         let paymentsAvailableHtml = `
-            <div class="form-check">
-                <input class="form-check-input" type="radio" name="flexRadioDefault" id="selectOther" aria-expanded="false" aria-controls="collapseCreditCard">
-                <label class="form-check-label" for="selectOther">
-                    Pagar con otro medio de pago
-                </label>
-            </div>
+            <div class="accordion" id="efipayPaymentMethodsaccordion">
+                <div class="accordion-item efipay-border-radius border-0 mb-3">
+                    <div class="accordion-header" id="headingOne">
+                        <button 
+                            onClick="generatePayment('redirect', <?php echo htmlentities($data); ?>)" 
+                            class="accordion-button efipay-button-accordion-item collapsed efipay-border-radius" 
+                            type="button" 
+                            data-bs-toggle="collapse" 
+                            data-bs-target="#" 
+                            aria-expanded="true" 
+                            aria-controls="collapseOne"
+                        >
+                            <img class="img-fluid me-3" src="<?php echo plugins_url('../img/icon-redirect.svg', __FILE__); ?>"></img>
+                            Pagar en nuestro check-out
+                        </button>
+                    </div>
+                </div>    
         `;
         if (paymentsAvailable.credit && enabledEmbebed === 'yes') {
             paymentsAvailableHtml += `
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" name="flexRadioDefault" id="selectCreditCard" aria-expanded="false" aria-controls="collapseCreditCard" checked>
-                    <label class="form-check-label" for="selectCreditCard">
-                        Pagar con tarjeta de crédito
-                    </label>
-                </div>
-                <form id="efipay_form">
-                    <?php wp_nonce_field( 'efipay_form_submit', '_efipay_nonce' ); ?>
-                    <input type="hidden" name="data" value="<?php echo htmlentities($data); ?>">
+                <div class="accordion-item efipay-border-radius border-0 mb-3">
+                    <div class="accordion-header" id="headingTwo">
+                        <button 
+                            id="efipaySelectCreditCard" 
+                            class="accordion-button efipay-button-accordion-item collapsed efipay-border-radius" 
+                            type="button" 
+                            data-bs-toggle="collapse" 
+                            data-bs-target="#efipayCollapseCreditCard" 
+                            aria-expanded="false" 
+                            aria-controls="efipayCollapseCreditCard"
+                        >
+                            <img class="img-fluid me-3" src="<?php echo plugins_url('../img/icon-enbbeded.svg', __FILE__); ?>"></img>
+                            Pagar con tarjeta de crédito o debito
+                        </button>
+                    </div>
+                    <div id="efipayCollapseCreditCard" class="accordion-collapse collapse" aria-labelledby="headingTwo" data-bs-parent="#efipayPaymentMethodsaccordion">
+                        <div class="accordion-body">
+                            <form id="efipay_form">
+                                <?php wp_nonce_field( 'efipay_form_submit', '_efipay_nonce' ); ?>
+                                <input type="hidden" name="data" value="<?php echo htmlentities($data); ?>">
 
-                    <div class="collapse mb-3" id="collapseCreditCard">
-                        <div class="card card-body">
-                            <div class="mb-3">
-                                <label for="payment_card_email" class="form-label">Correo</label>
-                                <input type="email" class="form-control" id="payment_card_email" name="email"  >
-                            </div>
+                                <div class="mb-3">
+                                    <div>
+                                        <div class="mb-3">
+                                            <label for="payment_card_name" class="form-label">Titular de la tarjeta</label>
+                                            <input type="text" class="form-control" id="payment_card_name" name="name"  >
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="payment_card_number" class="form-label">Número de la tarjeta</label>
+                                            <input type="number" class="form-control" id="payment_card_number" name="number" aria-describedby="emailHelp" >
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="payment_card_expiration_date" class="form-label">Fecha expiración</label>
+                                            <input type="month" id="payment_card_expiration_date" name="expiration_date" class="form-control" placeholder="YY-MM" autocomplete="cc-exp" >
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="payment_card_cvv" class="form-label">CVV</label>
+                                            <input type="password" class="form-control" id="payment_card_cvv" name="cvv"  >
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="payment_card_installments" class="form-label">Cantidad de cuotas</label>
+                                            <select class="form-select" id="payment_card_installments" name="installments" >
+                                                <?php for ($i = 1; $i <= 24; $i++) { ?>
+                                                    <option value="<?php echo $i; ?>"><?php echo $i; ?></option>
+                                                <?php } ?>
+                                            </select>
+                                        </div>
 
-                            <div class="mb-3">
-                                <label for="payment_card_address_1" class="form-label">Address 1</label>
-                                <input type="text" class="form-control" id="payment_card_address_1" name="address_1"  >
-                            </div>
+                                        <div class="mb-3">
+                                            <label for="payment_card_identification_type" class="form-label">Tipo de identificación</label>
+                                            
+                                            <div class="d-flex">
+                                                <select class="form-select flex-grow-1" id="payment_card_identification_type" name="identification_type" style="border-radius: 8px 0 0 8px !important; border-right: 1px solid #6f6f6b !important;">
+                                                    <option value="CC">CC</option>
+                                                    <option value="CE">CE</option>
+                                                    <option value="TI">TI</option>
+                                                    <option value="PA">PA</option>
+                                                    <option value="PEP">PEP</option>
+                                                    <option value="PPT">PPT</option>
+                                                    <option value="NIT">NIT</option>
+                                                    <option value="Pasaporte">Pasaporte</option>
+                                                    <option value="Otro">Otro</option>
+                                                </select>
 
-                            <div class="mb-3">
-                                <label for="payment_card_address_2" class="form-label">Address 2</label>
-                                <input type="text" class="form-control" id="payment_card_address_2" name="address_2"  >
-                            </div>
+                                                <input type="number" class="form-control" id="payment_card_id_number" name="id_number"  >
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <div class="d-flex">                                             
+                                                <div class="">
+                                                    <label for="payment_card_dialling_code" class="form-label">Indicativo</label>
+                                                    <select class="form-select" id="payment_card_dialling_code" name="dialling_code" style="border-radius: 8px 0 0 8px !important; border-right: 1px solid #6f6f6b !important;">
+                                                        <!-- Opciones de indicativo se agregarán aquí dinámicamente -->
+                                                    </select>
+                                                </div>
 
-                            <div class="mb-3 row">
-                                <div class="col-lg-6">
-                                    <label for="payment_card_city" class="form-label">City</label>
-                                    <input type="text" class="form-control" id="payment_card_city" name="city"  >
-                                </div>
-                                <div class="col-lg-6">
-                                    <label for="payment_card_state" class="form-label">State</label>
-                                    <input type="text" class="form-control" id="payment_card_state" name="state"  >
-                                </div>
-                            </div>
-
-                            <div class="mb-3 row">
-                                <div class="col-lg-6">
-                                    <label for="payment_card_country" class="form-label">Country</label>
-                                    <select class="form-select" id="payment_card_country" name="country" >
-                                        <!-- Opciones de countries se agregarán aquí dinámicamente -->
-                                    </select>
-                                </div>
-                                <div class="col-lg-6">
-                                    <label for="payment_card_zip_code" class="form-label">Zip Code</label>
-                                    <input type="text" class="form-control" id="payment_card_zip_code" name="zip_code"  >
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="payment_card_number" class="form-label">Número de la tarjeta</label>
-                                <input type="number" class="form-control" id="payment_card_number" name="number" aria-describedby="emailHelp" >
-                            </div>
-                            <div class="mb-3">
-                                <label for="payment_card_name" class="form-label">Titular de la tarjeta</label>
-                                <input type="text" class="form-control" id="payment_card_name" name="name"  >
-                            </div>
-
-                            <div class="mb-3 row">
-                                <div class="col-lg-6">
-                                    <label for="payment_card_cvv" class="form-label">CVV</label>
-                                    <input type="password" class="form-control" id="payment_card_cvv" name="cvv"  >
-                                </div>
-                                <div class="col-lg-6">
-                                    <label for="payment_card_expiration_date" class="form-label">Fecha expiración</label>
-                                    <input type="month"  id="cardExpiration" name="expiration_date" class="form-control" placeholder="YY-MM" autocomplete="cc-exp" >
-                                </div>
-                            </div>
-                            <div class="mb-3 row">
-                                <div class="col-lg-6">
-                                    <label for="payment_card_identification_type" class="form-label">Tipo de identificación</label>
-                                    <select class="form-select" id="payment_card_identification_type" name="identification_type" >
-                                        <option value="CC">CC</option>
-                                        <option value="CE">CE</option>
-                                        <option value="TI">TI</option>
-                                        <option value="PA">PA</option>
-                                        <option value="PEP">PEP</option>
-                                        <option value="PPT">PPT</option>
-                                        <option value="NIT">NIT</option>
-                                        <option value="Pasaporte">Pasaporte</option>
-                                        <option value="Otro">Otro</option>
-                                    </select>
-                                </div>
-                                <div class="col-lg-6">
-                                    <label for="payment_card_id_number" class="form-label">Número de documento</label>
-                                    <input type="number" class="form-control" id="payment_card_id_number" name="id_number"  >
-                                </div>
-                            </div>
-                            <div class="mb-3 row">
-                                <div class="col-lg-4">
-                                    <label for="payment_card_installments" class="form-label">Cantidad de cuotas</label>
-                                    <select class="form-select" id="payment_card_installments" name="installments" >
-                                        <?php for ($i = 1; $i <= 24; $i++) { ?>
-                                            <option value="<?php echo $i; ?>"><?php echo $i; ?></option>
-                                        <?php } ?>
-                                    </select>
-                                </div>
-                                <div class="col-lg-4">
-                                    <label for="payment_card_dialling_code" class="form-label">Indicativo</label>
-                                    <select class="form-select" id="payment_card_dialling_code" name="dialling_code" >
-                                        <!-- Opciones de indicativo se agregarán aquí dinámicamente -->
-                                    </select>
+                                                <div class="flex-grow-1">
+                                                    <label for="payment_card_cellphone" class="form-label">Número de celular</label>
+                                                    <input type="number" class="form-control" id="payment_card_cellphone" name="cellphone" >
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="payment_card_email" class="form-label">Correo electrónico</label>
+                                            <input type="email" class="form-control" id="payment_card_email" name="email"  >
+                                        </div>
+                                        <div class="mb-3">                         
+                                            <label for="payment_card_country" class="form-label">Country</label>
+                                            <select class="form-select" id="payment_card_country" name="country" >
+                                                <!-- Opciones de countries se agregarán aquí dinámicamente -->
+                                            </select>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="payment_card_state" class="form-label">State</label>
+                                            <input type="text" class="form-control" id="payment_card_state" name="state"  >
+                                        </div>
+                                        <div class="mb-3">                                       
+                                            <label for="payment_card_city" class="form-label">City</label>
+                                            <input type="text" class="form-control" id="payment_card_city" name="city"  >
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="payment_card_address_1" class="form-label">Address 1</label>
+                                            <input type="text" class="form-control" id="payment_card_address_1" name="address_1"  >
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="payment_card_address_2" class="form-label">Address 2</label>
+                                            <input type="text" class="form-control" id="payment_card_address_2" name="address_2"  >
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="payment_card_zip_code" class="form-label">Zip Code</label>
+                                            <input type="text" class="form-control" id="payment_card_zip_code" name="zip_code"  >
+                                        </div>                                      
+                                    </div>
                                 </div>
 
-                                <div class="col-lg-4">
-                                    <label for="payment_card_cellphone" class="form-label">Número de celular</label>
-                                    <input type="number" class="form-control" id="payment_card_cellphone" name="cellphone" >
+                                <div class="d-grid">
+                                    <button onClick="generatePayment('api', <?php echo htmlentities($data); ?>)" id="submit_efipay" class="btn fw-bold text-white" style="background-color: #6243ff;" disabled>
+                                        Pagar
+                                        <div id="spinner" class="spinner-border spinner-border-sm text-white" role="status" style="display: none;">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                    </button>
                                 </div>
-                            </div>
+                            </form>
                         </div>
                     </div>
-
-                    <div class="position-relative">
-                        <button type="submit" id="submit_efipay" class="btn btn-success rounded-pill w-100" disabled>
-                            Pagar
-                            <div id="spinner" class="spinner-border spinner-border-sm text-white" role="status" style="display: none;">
-                                <span class="visually-hidden">Loading...</span>
-                            </div>
-                        </button>
-                    </div>
-                </form>
+                </div>
             `;
-        }else{
-            paymentsAvailableHtml += `
-                <form id="efipay_form">
-                    <?php wp_nonce_field( 'efipay_form_submit', '_efipay_nonce' ); ?>
-                    <input type="hidden" name="data" value="<?php echo htmlentities($data); ?>">
-                    <div class="position-relative">
-                        <button type="submit" id="submit_efipay" class="btn btn-success rounded-pill w-100" disabled>
-                            Pagar
-                            <div id="spinner" class="spinner-border spinner-border-sm text-white" role="status" style="display: none;">
-                                <span class="visually-hidden">Loading...</span>
-                            </div>
-                        </button>
-                    </div>
-                </form>
-            `
         }
-        document.getElementById('payments').innerHTML = paymentsAvailableHtml;
 
-        // Mostrar el colapso después de agregar el contenido
-        const collapseElement = document.getElementById('collapseCreditCard');
-        if (collapseElement) {
-            const bsCollapse = new bootstrap.Collapse(collapseElement, {
-                toggle: false
-            });
-            bsCollapse.show();
-        }
+        paymentsAvailableHtml += `</div>`;
+
+        document.getElementById('efipayPaymentsContainerForms').innerHTML = paymentsAvailableHtml;
     })
     .catch(error => {
         hideSpinner();
@@ -525,10 +476,7 @@ async function getPaymentsAvailable() {
         console.error("Error al obtener los métodos de pago:", error);
     });
 }
-
 </script>
-
-
 
 <style>
     @media (min-width: 992px) {

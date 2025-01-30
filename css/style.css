@@ -13,3 +13,74 @@
     justify-content: space-between;
 }
 
+
+.efipay-container-payment-methods {
+    background: var(--Violet-50, #F2F3FF);
+}
+
+#efipayPaymentsContainerForms {
+    max-width: 768px;
+    margin: auto;
+}
+
+.efipay-logo {
+    object-fit: cover;
+    width: 140px;
+}
+
+.efipay-container-payment-methods .accordion-item:first-child .accordion-button::after {
+    transform: rotate(-90deg) !important;
+}
+
+.efipay-container-payment-methods form label {
+    color: var(--Grayscale-600, #5e5e5c);
+    font-size: 16px;
+    font-style: normal;
+    font-weight: 700;
+    line-height: 18px;
+}
+
+.efipay-container-payment-methods input.form-control,
+select.form-select,
+select.form-control,
+textarea.form-control,
+button.form-select {
+    border-radius: 8px !important;
+    background-color: var(--Grayscale-50, #f6f6f5);
+    border: none;
+    height: 40px;
+    padding: 8px 16px;
+    color: var(--Grayscale-500, #6f6f6b);
+    font-size: 16px;
+    font-style: normal;
+    font-weight: 400;
+    line-height: 18px;
+
+    &::placeholder {
+        color: var(--Grayscale-300, #b1b1af);
+        font-style: normal;
+        font-weight: 300;
+    }
+}
+
+.efipay-border-radius {
+    border-radius: 8px !important;
+}
+
+.efipay-button-accordion-item {
+    color: var(--Escala-grises-Negro, #4d4d4d) !important;
+    font-size: 16px !important;
+    font-style: normal !important;
+    font-weight: 700 !important;
+    line-height: 18px;
+    white-space: unset !important;
+}
+
+.efipay-button-accordion-item:hover {
+    background-color: #dddfff !important;
+}
+
+.efipay-button-accordion-item img {
+    object-fit: cover;
+    width: 40px;
+}

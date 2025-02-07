@@ -223,6 +223,10 @@ function generatePayment(type, data) {
 }
 
 $(document).ready(async function(){
+    if(enabledEmbebed !== 'yes') {
+        let data = <?php echo json_encode($data, JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS); ?>;
+        await generatePayment('redirect', JSON.parse(data))
+    }
     await getPaymentsAvailable()
     await sleep(2000);
 

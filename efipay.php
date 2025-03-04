@@ -95,6 +95,7 @@ function woocommerce_efipay_gateway() {
 
             // payment_embebed
             $this->enabled_embebed = $this->get_option('enabled_embebed');
+            $this->limit_date_payment = $this->get_option('limit_date_payment');
             $this->api_key = $this->get_option('api_key');
             $this->office_id = $this->get_option('office_id');
             $this->rejected_page = $this->get_option('rejected_page');
@@ -122,6 +123,12 @@ function woocommerce_efipay_gateway() {
                     'type' => 'checkbox',
                     'label' => __('Habilita la opcion de pago incrustado en tu sitio web', 'efipay'),
                     'default' => 'no'
+                ),
+                'limit_date_payment' => array(
+                    'title' => __('Limitar fecha de pago', 'efipay'),
+                    'type' => 'checkbox',
+                    'label' => __('Habilitar límite de fecha de pago a 1 día', 'efipay'),
+                    'default' => 'yes'
                 ),
                 'currency' => array(
                     'title' => __('Moneda', 'efipay'),
@@ -197,7 +204,6 @@ function woocommerce_efipay_gateway() {
 					"checkout_type" => "redirect"
 				],
 				"advanced_options" => [
-					"limit_date" => date('Y-m-d', strtotime('+1 day')),
 					"references" => [
 						"".$order->id."",
                         $order->get_billing_email(),
@@ -214,6 +220,11 @@ function woocommerce_efipay_gateway() {
 				],
 				"office" => $this->office_id
 			];
+
+            if($this->limit_date_payment === 'yes'){
+                $parameters_args['advanced_options']['limit_date'] = date('Y-m-d', strtotime('+1 day'));
+            }
+
             return $parameters_args;
         }
 

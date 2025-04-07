@@ -1,66 +1,138 @@
+.accordion-efipay {
+    border-radius: 8px !important;
+    overflow: hidden !important;
+}
+
+.accordion-item-efipay {
+    margin-bottom: 1rem !important;
+}
+
+.accordion-header-efipay {
+    background: #fff !important;
+    padding: 18px 15px !important;
+    display: flex !important;
+    align-items: center !important;
+    cursor: pointer !important;
+    justify-content: space-between !important;
+    font-weight: bold !important;
+}
+
+.accordion-header-efipay img {
+    width: 20px !important;
+    margin-right: 10px !important;
+}
+
+.accordion-content-efipay {
+    display: none !important;
+    padding: 15px !important;
+    background: #ffffff !important;
+    border-radius: 0px 0px 8px 8px !important;
+}
+
+.accordion-item-efipay.efipay-active .accordion-content-efipay {
+    display: block !important;
+}
+
+.accordion-item-efipay .arrow-efipay {
+    transition: transform 0.3s ease !important;
+}
+
+.accordion-item-efipay.efipay-active .arrow-efipay {
+    transform: rotate(90deg) !important;
+}
+
+.accordion-item-efipay.efipay-active .efipay-button-accordion-item{
+    background-color: #CFE2FF !important;
+}
+
+.form-efipay button {
+    background-color: #6243ff !important;
+    color: white !important;
+    font-weight: bold !important;
+    cursor: pointer !important;
+}
+
+.form-efipay button:hover {
+    background-color: #5032cc !important;
+}
 
 .payment_method_efipay img[alt=PayPal]{
 	width:160px!important;
 	height:auto!important;
-	object-fit: cover;
+	object-fit: cover !important;
 }
 
 .woocommerce{
     max-width: 100% !important;
 }
 .woocommerce ul.order_details{
-    display: flex;
-    justify-content: space-between;
+    display: flex !important;
+    justify-content: space-between !important;
 }
 
-
 .efipay-container-payment-methods {
-    background: var(--Violet-50, #F2F3FF);
+    background: var(--Violet-50, #F2F3FF) !important;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    padding: 3rem 1.5rem !important;
 }
 
 #efipayPaymentsContainerForms {
-    max-width: 768px;
-    margin: auto;
+    max-width: 768px !important;
+    margin: auto !important;
+}
+
+.efipay-container-logo {
+    justify-content: center !important;
+    display: flex !important;
+    margin-bottom: 1rem !important;
 }
 
 .efipay-logo {
-    object-fit: cover;
-    width: 140px;
+    object-fit: cover !important;
+    width: 140px !important;
 }
 
-.efipay-container-payment-methods .accordion-item:first-child .accordion-button::after {
-    transform: rotate(-90deg) !important;
+.efipay-container-items {
+    display: flex !important;
+    align-items: center !important;
 }
 
-.efipay-container-payment-methods form label {
-    color: var(--Grayscale-600, #5e5e5c);
-    font-size: 16px;
-    font-style: normal;
-    font-weight: 700;
-    line-height: 18px;
+.efipay-container-payment-methods .form-efipay label {
+    color: var(--Grayscale-600, #5e5e5c) !important;
+    font-size: 16px !important;
+    font-style: normal !important;
+    font-weight: 700 !important;
+    line-height: 18px !important;
 }
 
-.efipay-container-payment-methods input.form-control,
-select.form-select,
-select.form-control,
-textarea.form-control,
-button.form-select {
+.efipay-container-payment-methods .form-efipay input,
+select,
+textarea,
+button {
     border-radius: 8px !important;
-    background-color: var(--Grayscale-50, #f6f6f5);
-    border: none;
-    height: 40px;
-    padding: 8px 16px;
-    color: var(--Grayscale-500, #6f6f6b);
-    font-size: 16px;
-    font-style: normal;
-    font-weight: 400;
-    line-height: 18px;
+    background-color: var(--Grayscale-50, #f6f6f5) !important;
+    border: none !important;
+    height: 40px !important;
+    color: var(--Grayscale-500, #6f6f6b) !important;
+    font-size: 16px !important;
+    font-style: normal !important;
+    font-weight: 400 !important;
+    line-height: 18px !important;
+    box-sizing: border-box !important;
+    padding: 8px 16px !important;
+    display: block;
+    width: 100% !important;
+    margin-bottom: 1rem !important;
+}
 
-    &::placeholder {
-        color: var(--Grayscale-300, #b1b1af);
-        font-style: normal;
-        font-weight: 300;
-    }
+.efipay-container-payment-methods .form-efipay
+select:focus,
+textarea:focus,
+input:focus {
+    border-color: #84b9f5 !important; /* Color azul claro */
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(132, 185, 245, 0.3) !important; /* Glow suave */
+    background-color: #fff !important;
 }
 
 .efipay-border-radius {
@@ -72,7 +144,6 @@ button.form-select {
     font-size: 16px !important;
     font-style: normal !important;
     font-weight: 700 !important;
-    line-height: 18px;
     white-space: unset !important;
 }
 
@@ -81,6 +152,26 @@ button.form-select {
 }
 
 .efipay-button-accordion-item img {
-    object-fit: cover;
-    width: 40px;
+    object-fit: cover !important;
+    width: 40px !important;
 }
+
+.efipay-loader {
+    width: 18px;
+    height: 18px;
+    border: 5px solid #FFF;
+    border-bottom-color: transparent;
+    border-radius: 50%;
+    display: inline-block;
+    box-sizing: border-box;
+    animation: rotation 1s linear infinite;
+    }
+
+    @keyframes rotation {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+} 

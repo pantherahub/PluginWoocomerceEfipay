@@ -25,7 +25,6 @@ $phone = file_get_contents($phone_url);
     </div>
 </div>
 
-<script src="<?php echo plugins_url('../js/jquery-3.7.1.min.js', __FILE__); ?>"></script>
 <script src="<?php echo plugins_url('../js/sweetalert2@11.js', __FILE__); ?>"></script>
 
 <script>
@@ -34,30 +33,32 @@ const enabledEmbebed = "<?php echo esc_js($this->enabled_embebed); ?>";
 // Ejemplo de función que llama a una función de WooCommerce para vaciar el carrito
 function clearCart() {
     // Realizar una solicitud AJAX
-    $.ajax({
-        url: '<?php echo admin_url('admin-ajax.php'); ?>',
-        type: 'POST',
-        data: {
-            'action': 'clear_cart_ajax' // Nombre de la acción de WordPress
+    fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
         },
-        success: function(response) {
-            console.log('El carrito se ha vaciado correctamente.');
-        },
-        error: function(xhr, status, error) {
-            console.error('Error al vaciar el carrito:', error);
-        }
+        body: new URLSearchParams({
+            action: 'clear_cart_ajax'
+        })
+    })
+    .then(response => response.text()) // o .json() si tu respuesta es JSON
+    .then(data => {
+        console.log('El carrito se ha vaciado correctamente.');
+    })
+    .catch(error => {
+        console.error('Error al vaciar el carrito:', error);
     });
 }
 
 function showSpinner() {
-    $('#efipay-spinner').show();
-    $('#efipay-spinner').show();
-    $('#submit_efipay').prop('disabled', true);
+    document.getElementById('efipay-spinner').style.display = 'inline-block';
+    document.getElementById('submit_efipay').disabled = true;
 }
 
 function hideSpinner(){
-    $('#efipay-spinner').hide();
-    $('#submit_efipay').prop('disabled', false);
+    document.getElementById('efipay-spinner').style.display = 'none';
+    document.getElementById('submit_efipay').disabled = false;
 }
 
 function sleep(ms) {
@@ -101,26 +102,28 @@ function generatePayment(type, data) {
                 } else {
                     // Si es API
                     var paymentData = {
-                        number: $("#efipay_payment_card_number").val(),
-                        name: $("#efipay_payment_card_name").val(),
-                        expiration_date: $('#efipay_payment_card_expiration_date').val(),
-                        cvv: $('#efipay_payment_card_cvv').val(),
-                        identification_type: $('#efipay_payment_card_identification_type').val(),
-                        id_number: $('#efipay_payment_card_id_number').val(),
-                        installments: $('#efipay_payment_card_installments').val(),
-                        dialling_code:"+" + $('#efipay_payment_card_dialling_code').val(),
-                        cellphone: $('#efipay_payment_card_cellphone').val(),
+                        number: document.getElementById('efipay_payment_card_number').value,
+                        name: document.getElementById('efipay_payment_card_name').value,
+                        expiration_date: document.getElementById('efipay_payment_card_expiration_date').value,
+                        cvv: document.getElementById('efipay_payment_card_cvv').value,
+                        identification_type: document.getElementById('efipay_payment_card_identification_type').value,
+                        id_number: document.getElementById('efipay_payment_card_id_number').value,
+                        installments: document.getElementById('efipay_payment_card_installments').value,
+                        dialling_code: "+" + document.getElementById('efipay_payment_card_dialling_code').value,
+                        cellphone: document.getElementById('efipay_payment_card_cellphone').value,
                     };
+
                     var customerPayer = {
-                        name: $("#efipay_payment_card_name").val(),
-                        email: $('#efipay_payment_card_email').val(),
-                        address_1: $('#efipay_payment_card_address_1').val(),
-                        address_2: $('#efipay_payment_card_address_2').val(),
-                        city: $('#efipay_payment_card_city').val(),
-                        state: $('#efipay_payment_card_state').val(),
-                        zip_code: $('#efipay_payment_card_zip_code').val(),
-                        country: $('#efipay_payment_card_country').val(),
-                    }
+                        name: document.getElementById('efipay_payment_card_name').value,
+                        email: document.getElementById('efipay_payment_card_email').value,
+                        address_1: document.getElementById('efipay_payment_card_address_1').value,
+                        address_2: document.getElementById('efipay_payment_card_address_2').value,
+                        city: document.getElementById('efipay_payment_card_city').value,
+                        state: document.getElementById('efipay_payment_card_state').value,
+                        zip_code: document.getElementById('efipay_payment_card_zip_code').value,
+                        country: document.getElementById('efipay_payment_card_country').value,
+                    };
+
                     var payment = {
                         id: data.payment_id,
                         token: data.token,
@@ -220,7 +223,7 @@ function generatePayment(type, data) {
     }
 }
 
-$(document).ready(async function(){
+document.addEventListener('DOMContentLoaded', async function() {
     if(enabledEmbebed !== 'yes') {
         let data = <?php echo json_encode($data, JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS); ?>;
         await generatePayment('redirect', JSON.parse(data))
@@ -228,28 +231,36 @@ $(document).ready(async function(){
     await getPaymentsAvailable()
     await sleep(2000);
 
-    $('#efipaySelectCreditCard').click(function() {
+    document.getElementById('efipaySelectCreditCard').addEventListener('click', function() {
         setTimeout(function() {
-            if ($('.accordion-item-efipay').hasClass('efipay-active')) {
-                $('#submit_efipay').prop('disabled', false);
-                // Agregar los atributos required a los campos de tarjeta de crédito
-                $('#efipay_payment_card_number').attr('required', true);
-                $('#efipay_payment_card_name').attr('required', true);
-                $('#efipay_payment_card_cvv').attr('required', true);
-                $('#efipay_payment_card_expiration_date').attr('required', true);
-                $('#efipay_payment_card_identification_type').attr('required', true);
-                $('#efipay_payment_card_id_number').attr('required', true);
-                $('#efipay_payment_card_installments').attr('required', true);
-                $('#efipay_payment_card_dialling_code').attr('required', true);
-                $('#efipay_payment_card_cellphone').attr('required', true);
-    
-                $('#efipay_payment_card_email').attr('required', true);
-                $('#efipay_payment_card_address_1').attr('required', true);
-                $('#efipay_payment_card_address_2').attr('required', true);
-                $('#efipay_payment_card_city').attr('required', true);
-                $('#efipay_payment_card_state').attr('required', true);
-                $('#efipay_payment_card_zip_code').attr('required', true);
-                $('#efipay_payment_card_country').attr('required', true);
+            if (document.querySelector('.accordion-item-efipay')?.classList.contains('efipay-active')) {
+                document.getElementById('submit_efipay').disabled = false;
+
+                const requiredFields = [
+                    'efipay_payment_card_number',
+                    'efipay_payment_card_name',
+                    'efipay_payment_card_cvv',
+                    'efipay_payment_card_expiration_date',
+                    'efipay_payment_card_identification_type',
+                    'efipay_payment_card_id_number',
+                    'efipay_payment_card_installments',
+                    'efipay_payment_card_dialling_code',
+                    'efipay_payment_card_cellphone',
+                    'efipay_payment_card_email',
+                    'efipay_payment_card_address_1',
+                    'efipay_payment_card_address_2',
+                    'efipay_payment_card_city',
+                    'efipay_payment_card_state',
+                    'efipay_payment_card_zip_code',
+                    'efipay_payment_card_country',
+                ];
+
+                requiredFields.forEach(function(id) {
+                    const input = document.getElementById(id);
+                    if (input) {
+                        input.setAttribute('required', 'true');
+                    }
+                });
             }
         }, 500);
     });
@@ -274,7 +285,7 @@ $(document).ready(async function(){
     }
 
     // Establecer las opciones dentro del select
-    $('#efipay_payment_card_dialling_code').html(selectOptions);
+    document.getElementById('efipay_payment_card_dialling_code').innerHTML = selectOptions;
 
     // optener los countries
     getCountries()
@@ -298,7 +309,7 @@ function getCountries(){
             const country = countries[countryCode]; // Accede al objeto país utilizando la clave
             optionsCountry += '<option value="' + country.iso3_code + '">' + country.name + '</option>';
         }
-        $('#efipay_payment_card_country').html(optionsCountry);
+        document.getElementById('efipay_payment_card_country').innerHTML = optionsCountry;
 
     }).catch(error => {
         hideSpinner()
@@ -324,7 +335,6 @@ function toggleAccordion(element) {
 }
 
 async function getPaymentsAvailable() {
-    showSpinner();
     fetch("https://sag.efipay.co/api/v1/resources/available-payment-methods", {
         method: "GET",
         headers: {
@@ -340,7 +350,6 @@ async function getPaymentsAvailable() {
         return response.json();
     })
     .then(paymentsAvailable => {
-        hideSpinner();
         let paymentsAvailableHtml = `
             <div class="accordion-efipay">
                 <div class="accordion-item-efipay efipay-border-radius" onClick="generatePayment('redirect', <?php echo htmlentities($data); ?>)" >
@@ -526,7 +535,6 @@ async function getPaymentsAvailable() {
         document.getElementById('efipayPaymentsContainerForms').innerHTML = paymentsAvailableHtml;
     })
     .catch(error => {
-        hideSpinner();
         Swal.fire({
             title: "Error",
             text: error.message,  // Mostrar el mensaje del error
@@ -536,19 +544,3 @@ async function getPaymentsAvailable() {
     });
 }
 </script>
-
-<style>
-    @media (min-width: 992px) {
-        .w-lg-75 {
-            width: 75%;
-        }
-
-    }
-
-    input[type=number]{
-        min-width: auto !important;
-    }
-    input[type=month]{
-        min-width: auto !important;
-    }
-</style>

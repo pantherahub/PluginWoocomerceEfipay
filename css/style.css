@@ -157,17 +157,17 @@ input:focus {
 }
 
 .efipay-loader {
-    width: 18px;
-    height: 18px;
-    border: 5px solid #FFF;
-    border-bottom-color: transparent;
-    border-radius: 50%;
+    width: 18px !important;
+    height: 18px !important;
+    border: 5px solid #FFF !important;
+    border-bottom-color: transparent !important;
+    border-radius: 50% !important;
     display: inline-block;
-    box-sizing: border-box;
+    box-sizing: border-box !important;
     animation: rotation 1s linear infinite;
-    }
+}
 
-    @keyframes rotation {
+@keyframes rotation {
     0% {
         transform: rotate(0deg);
     }

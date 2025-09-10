@@ -3,7 +3,7 @@
 Plugin Name: Efipay Gateway Payment WooCommerce 
 Plugin URI: https://sag.efipay.co/docs/1.0/overview
 Description: Plugin de integracion entre Wordpress-Woocommerce con Efipay
-Version: 2.0.6
+Version: 2.0.7
 Author: Efipay
 Author URI: https://efipay.co
 */
@@ -98,9 +98,6 @@ function woocommerce_efipay_gateway() {
             $this->limit_date_payment = $this->get_option('limit_date_payment');
             $this->api_key = $this->get_option('api_key');
             $this->office_id = $this->get_option('office_id');
-            $this->rejected_page = $this->get_option('rejected_page');
-            $this->await_page = $this->get_option('await_page');
-            $this->confirmation_page = $this->get_option('confirmation_page');
             $this->currency = $this->get_option('currency');
             $this->webhook_url = $this->get_option('webhook_url');
             $this->token = $this->get_option('token');
@@ -150,22 +147,7 @@ function woocommerce_efipay_gateway() {
                     'title' => __('Id Sucursal/Oficina', 'efipay'),
                     'type' => 'text',
                     'description' => __('ID de tu sucursal Efipay.', 'efipay')
-                ),
-                'rejected_page' => array(
-                    'title' => __('Página redirección de rechazo'),
-                    'type' => 'text',
-                    'description' => __('URL de la página que recibe la respuesta cuándo la transacción no fue exitosa; fue rechazada por algún motivo (falta de fondos, error, etc.).', 'efipay'),
-                ),
-				'await_page' => array(
-                    'title' => __('Página redirección de estado pendiente'),
-                    'type' => 'text',
-                    'description' => __('La transacción está en proceso, aún no se ha completado ni confirmado.', 'efipay'),
-                ),
-                'confirmation_page' => array(
-                    'title' => __('Página redirección de confirmación'),
-                    'type' => 'text',
-                    'description' => __('URL de la página que recibe la respuesta cuándo la transacción fue validada y aprobada con éxito.', 'efipay'),
-				)
+                )
             );
         }
 
@@ -201,6 +183,8 @@ function woocommerce_efipay_gateway() {
                 $description = substr($description, 0, 240) . ' y otros...';
             }
 
+            $default_woocomerce_url = $order->get_checkout_order_received_url();
+
 			$parameters_args = [
 				"payment" => [
 					"description" => 'Pago del pedido Woocommerce: '.$order->id,
@@ -215,9 +199,9 @@ function woocommerce_efipay_gateway() {
                         "Plugin Woocomerce"
 					],
 					"result_urls" => array_filter([
-						"approved" => $this->confirmation_page,
-						"rejected" => $this->rejected_page,
-						"pending" => $this->await_page,
+						"approved" => $default_woocomerce_url,
+						"rejected" => $default_woocomerce_url,
+						"pending" => $default_woocomerce_url,
 						"webhook" => home_url().'/wp-json/efipay/v1/webhook'
 					]),
 					"has_comments" => true,
@@ -373,6 +357,45 @@ function add_icon($icon_html, $gateway_id){
 		return $icon_html;
 	}
 }
+
+// Script para asegurar que el botón de proceder al pedido se active correctamente
+function efipay_checkout_script() {
+    // Solo añadir en la página de checkout
+    if (is_checkout()) {
+        ?>
+        <script type="text/javascript">
+        jQuery(document).ready(function($) {
+            // Verificar el estado del botón cuando cambia el método de pago
+            $(document.body).on('change', 'input[name="payment_method"]', function() {
+                var paymentMethod = $('input[name="payment_method"]:checked').val();
+                
+                // Si el método de pago es efipay, asegurar que el botón esté habilitado
+                if (paymentMethod === 'efipay') {
+                    $('#place_order').prop('disabled', false).removeClass('disabled');
+                }
+            });
+            
+            // También verificar en la carga inicial de la página
+            $(document.body).on('updated_checkout', function() {
+                var paymentMethod = $('input[name="payment_method"]:checked').val();
+                if (paymentMethod === 'efipay') {
+                    $('#place_order').prop('disabled', false).removeClass('disabled');
+                }
+                
+                // Si solo hay un método de pago y es efipay, asegurar que esté seleccionado y el botón habilitado
+                if ($('input[name="payment_method"]').length === 1 && 
+                    $('input[name="payment_method"]').val() === 'efipay') {
+                    $('input[name="payment_method"]').prop('checked', true);
+                    $('#place_order').prop('disabled', false).removeClass('disabled');
+                }
+            });
+        });
+        </script>
+        <?php
+    }
+}
+add_action('wp_footer', 'efipay_checkout_script');
+
 // SE COMENTA ESTA FUNCION PARA VER SI ES LA CAUSANTE DEL PROBLEMA CON EL CLIENTE
 // function my_enqueue_scripts() {
     // wp_enqueue_style('bootstrap-css', 'https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css');

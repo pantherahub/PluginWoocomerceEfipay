@@ -1,5 +1,5 @@
 const settings = window.wc.wcSettings.getSetting( 'efipay_data', {} );
-const label = window.wp.htmlEntities.decodeEntities( "settings.title" ) || window.wp.i18n.__( 'Paga con Efipay', 'efipay' );
+const label = window.wp.htmlEntities.decodeEntities( settings.title ) || window.wp.i18n.__( 'Paga con Efipay', 'efipay' );
 const Content = () => {
     return window.wp.htmlEntities.decodeEntities( settings.description || '' );
 };
@@ -23,7 +23,14 @@ const Block_Gateway = {
     label: Object( window.wp.element.createElement )( Label, null ),
     content: Object( window.wp.element.createElement )( Content, null ),
     edit: Object( window.wp.element.createElement )( Content, null ),
-    canMakePayment: () => true,
+    canMakePayment: () => {
+        // Verificando que tengamos los datos necesarios
+        if (!settings || Object.keys(settings).length === 0) {
+            console.warn('Efipay: Configuración no disponible');
+            return false;
+        }
+        return true;
+    },
     ariaLabel: label,
     supports: {
         features: settings.supports,

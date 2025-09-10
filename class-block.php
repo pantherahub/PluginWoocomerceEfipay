@@ -13,12 +13,26 @@ final class Efipay_Blocks extends AbstractPaymentMethodType {
 
     public function initialize() {
         $this->settings = get_option( 'woocommerce_efipay_settings', [] );
+        
+        // Asegurar que los datos del método de pago estén disponibles para los bloques de checkout
+        add_filter(
+            'woocommerce_payment_gateway_get_settings',
+            function( $settings, $gateway ) {
+                if ( $gateway instanceof WC_Efipay ) {
+                    $settings = array_merge( $settings, $this->get_payment_method_data() );
+                }
+                return $settings;
+            },
+            10, 
+            2
+        );
     }
 
     
 
     public function is_active() {
-        return $this->gateway->is_available();
+        // Verificar si el gateway está disponible y activado
+        return $this->gateway->is_available() && $this->gateway->enabled === 'yes';
     }
 
     public function get_payment_method_script_handles() {
@@ -46,10 +60,14 @@ final class Efipay_Blocks extends AbstractPaymentMethodType {
     public function get_payment_method_data() {
         return [
             'title' => "Efipay",
-            'description' => "Al realizar un pago con EfiPay, podrás recibir notificaciones por SMS y correo electrónico sobre el estado de tu compra
-            Al realizar la compra con este método de pago, aceptas nuestras Condiciones y Política de Privacidad.",
-            'icon' => plugin_dir_url(__FILE__) . './img/logoEfipay.png', 
-
+            'description' => "Al realizar un pago con EfiPay, podrás recibir notificaciones por SMS y correo electrónico sobre el estado de tu compra. Al realizar la compra con este método de pago, aceptas nuestras Condiciones y Política de Privacidad.",
+            'icon' => plugin_dir_url(__FILE__) . './img/logoEfipay.png',
+            'supports' => [
+                'products',
+                'refunds',
+                'checkout',
+            ],
+            'enabled' => $this->gateway->enabled === 'yes'
         ];
     }
 

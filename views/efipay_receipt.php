@@ -52,13 +52,29 @@ function clearCart() {
 }
 
 function showSpinner() {
-    document.getElementById('efipay-spinner').style.display = 'inline-block';
-    document.getElementById('submit_efipay').disabled = true;
+    const spinner = document.getElementById('efipay-spinner');
+    const submitBtn = document.getElementById('submit_efipay');
+
+    if (spinner) {
+        spinner.style.display = 'inline-block';
+    }
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.classList && submitBtn.classList.remove('disabled');
+    }
 }
 
 function hideSpinner(){
-    document.getElementById('efipay-spinner').style.display = 'none';
-    document.getElementById('submit_efipay').disabled = false;
+    const spinner = document.getElementById('efipay-spinner');
+    const submitBtn = document.getElementById('submit_efipay');
+
+    if (spinner) {
+        spinner.style.display = 'none';
+    }
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.classList && submitBtn.classList.remove('disabled');
+    }
 }
 
 function sleep(ms) {

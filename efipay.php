@@ -3,7 +3,7 @@
 Plugin Name: Efipay Gateway Payment WooCommerce 
 Plugin URI: https://sag.efipay.co/docs/1.0/overview
 Description: Plugin de integracion entre Wordpress-Woocommerce con Efipay
-Version: 2.0.8
+Version: 2.0.9
 Author: Efipay
 Author URI: https://efipay.co
 */
@@ -204,8 +204,7 @@ function woocommerce_efipay_gateway() {
 						"pending" => $default_woocomerce_url,
 						"webhook" => home_url().'/wp-json/efipay/v1/webhook'
 					]),
-					"has_comments" => true,
-					"comments_label" => "Aqui tu comentario"
+					"has_comments" => false
 				],
 				"office" => $this->office_id
 			];

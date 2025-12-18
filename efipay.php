@@ -3,7 +3,7 @@
 Plugin Name: Efipay Gateway Payment WooCommerce 
 Plugin URI: https://sag.efipay.co/docs/1.0/overview
 Description: Plugin de integracion entre Wordpress-Woocommerce con Efipay
-Version: 2.0.9
+Version: 2.1.0
 Author: Efipay
 Author URI: https://efipay.co
 */
@@ -95,7 +95,6 @@ function woocommerce_efipay_gateway() {
 
             // payment_embebed
             $this->enabled_embebed = $this->get_option('enabled_embebed');
-            $this->limit_date_payment = $this->get_option('limit_date_payment');
             $this->api_key = $this->get_option('api_key');
             $this->office_id = $this->get_option('office_id');
             $this->currency = $this->get_option('currency');
@@ -120,12 +119,6 @@ function woocommerce_efipay_gateway() {
                     'type' => 'checkbox',
                     'label' => __('Habilita la opcion de pago incrustado en tu sitio web', 'efipay'),
                     'default' => 'no'
-                ),
-                'limit_date_payment' => array(
-                    'title' => __('Limitar fecha de pago', 'efipay'),
-                    'type' => 'checkbox',
-                    'label' => __('Habilitar límite de fecha de pago a 1 día', 'efipay'),
-                    'default' => 'yes'
                 ),
                 'currency' => array(
                     'title' => __('Moneda', 'efipay'),
@@ -185,6 +178,18 @@ function woocommerce_efipay_gateway() {
 
             $default_woocomerce_url = $order->get_checkout_order_received_url();
 
+            $limit_date = null;
+            // Forzar timezone de Colombia (America/Bogota) solo para este cálculo
+            try {
+                $timezone_colombia = new DateTimeZone('America/Bogota');
+                $limit_date_object = new DateTime('now', $timezone_colombia);
+                $limit_date_object->modify('+1 hour');
+
+                $limit_date = $limit_date_object->format('Y-m-d H:i:s');
+            } catch (Exception $e) {
+                $limit_date = date('Y-m-d H:i:s', strtotime('+1 hour'));
+            }
+
 			$parameters_args = [
 				"payment" => [
 					"description" => 'Pago del pedido Woocommerce: '.$order->id,
@@ -193,6 +198,7 @@ function woocommerce_efipay_gateway() {
 					"checkout_type" => "redirect"
 				],
 				"advanced_options" => [
+                    "limit_date" => $limit_date,
 					"references" => [
 						"".$order->id."",
                         $order->get_billing_email(),
@@ -208,10 +214,6 @@ function woocommerce_efipay_gateway() {
 				],
 				"office" => $this->office_id
 			];
-
-            if($this->limit_date_payment === 'yes'){
-                $parameters_args['advanced_options']['limit_date'] = date('Y-m-d', strtotime('+1 day'));
-            }
 
             return $parameters_args;
         }
@@ -262,7 +264,7 @@ function handle_efipay_webhook($request) {
 		));
 	}
 
-	$order_id = $checkout['payment_gateway']['advanced_option']['references'][0];
+	$order_id = $checkout['payment_gateway']['advanced_option']['references'][0] ?? $body['payment_gateway']['advanced_option']['references'][0];
 	if (!isset($order_id)) {
 		die("No se ha recibido información de referencia");
 	}

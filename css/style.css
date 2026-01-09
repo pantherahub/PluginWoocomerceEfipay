@@ -106,14 +106,14 @@
 }
 
 .efipay-container-payment-methods .form-efipay input,
-select,
-textarea,
-button {
+.efipay-container-payment-methods .form-efipay select,
+.efipay-container-payment-methods .form-efipay textarea,
+.efipay-container-payment-methods .form-efipay button {
     border-radius: 8px !important;
-    background-color: var(--Grayscale-50, #f6f6f5) !important;
+    background-color: var(--Grayscale-50, #f6f6f5);
     border: none !important;
     height: 40px !important;
-    color: var(--Grayscale-500, #6f6f6b) !important;
+    color: var(--Grayscale-500, #6f6f6b);
     font-size: 16px !important;
     font-style: normal !important;
     font-weight: 400 !important;
@@ -125,10 +125,9 @@ button {
     margin-bottom: 1rem !important;
 }
 
-.efipay-container-payment-methods .form-efipay
-select:focus,
-textarea:focus,
-input:focus {
+.efipay-container-payment-methods .form-efipay select:focus,
+.efipay-container-payment-methods .form-efipay textarea:focus,
+.efipay-container-payment-methods .form-efipay input:focus {
     border-color: #84b9f5 !important; /* Color azul claro */
     outline: none !important;
     box-shadow: 0 0 0 3px rgba(132, 185, 245, 0.3) !important; /* Glow suave */

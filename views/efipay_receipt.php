@@ -6,11 +6,19 @@ $parameters_args = $this->get_params_post($order_id);
 // Construir el objeto de datos para enviar
 $data = json_encode($parameters_args);
 
+// Datos del cliente desde WooCommerce (facturación + identificación) para pre-rellenar el formulario
+$customer_data = $this->get_customer_data_for_receipt($order);
+
 $names_url = 'http://country.io/names.json';
 $names = file_get_contents($names_url);
 
 $phone_url = 'http://country.io/phone.json';
 $phone = file_get_contents($phone_url);
+
+// URL de confirmación del pedido (página "Gracias por tu compra") para redirigir tras pago aprobado con tarjeta
+$order_received_url = isset($parameters_args['advanced_options']['result_urls']['approved'])
+    ? $parameters_args['advanced_options']['result_urls']['approved']
+    : (is_object($order_id) && method_exists($order_id, 'get_checkout_order_received_url') ? $order_id->get_checkout_order_received_url() : home_url());
 
 ?>
 
@@ -30,6 +38,8 @@ $phone = file_get_contents($phone_url);
 <script>
 const apiKey = "<?php echo esc_js($this->api_key); ?>";
 const enabledEmbebed = "<?php echo esc_js($this->enabled_embebed); ?>";
+const efipayOrderReceivedUrl = "<?php echo esc_url($order_received_url); ?>";
+const efipayCustomerData = <?php echo json_encode($customer_data, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
 // Ejemplo de función que llama a una función de WooCommerce para vaciar el carrito
 function clearCart() {
     // Realizar una solicitud AJAX
@@ -178,8 +188,8 @@ function generatePayment(type, data) {
                             text: 'Estado de la transacción: ' + data_payment.transaction.status + `${data_payment.transaction.status !== 'Aprobada' ? ', Intenta nuevamente' : ''}`,
                         });
                         if (data_payment.transaction.status === 'Aprobada') {
-                            await clearCart() 
-                            window.location.href = "<?php echo home_url(); ?>";
+                            await clearCart();
+                            window.location.href = efipayOrderReceivedUrl;
                         }
                     }).catch(error => {
 
@@ -307,6 +317,32 @@ document.addEventListener('DOMContentLoaded', async function() {
     getCountries()
 });
 
+function prefillCustomerData() {
+    if (!efipayCustomerData || typeof efipayCustomerData !== 'object') return;
+    const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el && val !== undefined && val !== null) el.value = val;
+    };
+    setVal('efipay_payment_card_name', efipayCustomerData.name);
+    setVal('efipay_payment_card_email', efipayCustomerData.email);
+    setVal('efipay_payment_card_address_1', efipayCustomerData.address_1);
+    setVal('efipay_payment_card_address_2', efipayCustomerData.address_2);
+    setVal('efipay_payment_card_city', efipayCustomerData.city);
+    setVal('efipay_payment_card_state', efipayCustomerData.state);
+    setVal('efipay_payment_card_zip_code', efipayCustomerData.zip_code || efipayCustomerData.postcode);
+    setVal('efipay_payment_card_identification_type', efipayCustomerData.identification_type);
+    setVal('efipay_payment_card_id_number', efipayCustomerData.identification_number);
+    if (efipayCustomerData.phone) {
+        const phone = String(efipayCustomerData.phone).replace(/\D/g, '');
+        setVal('efipay_payment_card_cellphone', phone.length > 10 ? phone.slice(-10) : phone);
+        const dialling = document.getElementById('efipay_payment_card_dialling_code');
+        if (dialling && phone.startsWith('57') && phone.length > 10) setVal('efipay_payment_card_dialling_code', '57');
+    }
+    var iso2ToIso3 = { CO: 'COL', US: 'USA', MX: 'MEX', AR: 'ARG', PE: 'PER', EC: 'ECU', VE: 'VEN', CL: 'CHL', BO: 'BOL', UY: 'URY', PY: 'PRY', PA: 'PAN', CR: 'CRI', DO: 'DOM', ES: 'ESP' };
+    var countryIso3 = iso2ToIso3[efipayCustomerData.country] || efipayCustomerData.country;
+    setVal('efipay_payment_card_country', countryIso3);
+}
+
 function getCountries(){
     showSpinner()
     fetch("https://sag.efipay.co/api/v1/resources/get-countries", {
@@ -326,6 +362,7 @@ function getCountries(){
             optionsCountry += '<option value="' + country.iso3_code + '">' + country.name + '</option>';
         }
         document.getElementById('efipay_payment_card_country').innerHTML = optionsCountry;
+        prefillCustomerData();
 
     }).catch(error => {
         hideSpinner()

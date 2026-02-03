@@ -3,7 +3,7 @@
 Plugin Name: Efipay Gateway Payment WooCommerce 
 Plugin URI: https://sag.efipay.co/docs/1.0/overview
 Description: Plugin de integracion entre Wordpress-Woocommerce con Efipay
-Version: 2.1.1
+Version: 2.1.3
 Author: Efipay
 Author URI: https://efipay.co
 */
@@ -77,18 +77,106 @@ function agregar_efipay_gateway($methods) {
     return $methods;
 }
 
+// Campos de facturación adicionales para Efipay (tipo y número de identificación) - igual en todas las tiendas
+// Estos campos siempre se agregan porque Efipay los necesita, incluso si no hay formulario de envío
+add_filter('woocommerce_checkout_fields', 'efipay_add_identification_checkout_fields');
+function efipay_add_identification_checkout_fields($fields) {
+    // Solo agregar campos si WooCommerce y Efipay están disponibles
+    if (!function_exists('WC') || !WC() || !WC()->payment_gateways) {
+        return $fields;
+    }
+    $available_gateways = WC()->payment_gateways->get_available_payment_gateways();
+    if (!isset($available_gateways['efipay'])) {
+        return $fields;
+    }
+    
+    $fields['billing']['billing_identification_type'] = array(
+        'type'        => 'select',
+        'label'       => __('Tipo de identificación', 'efipay'),
+        'placeholder' => __('Seleccione', 'efipay'),
+        'required'    => true,
+        'class'       => array('form-row-wide'),
+        'options'     => array(
+            ''           => __('Seleccione', 'efipay'),
+            'CC'         => 'CC',
+            'CE'         => 'CE',
+            'TI'         => 'TI',
+            'PA'         => 'PA',
+            'PEP'        => 'PEP',
+            'PPT'        => 'PPT',
+            'NIT'        => 'NIT',
+            'Pasaporte'  => __('Pasaporte', 'efipay'),
+            'Otro'       => __('Otro', 'efipay'),
+        ),
+        'priority'    => 35,
+    );
+    $fields['billing']['billing_identification_number'] = array(
+        'type'        => 'text',
+        'label'       => __('Número de identificación', 'efipay'),
+        'placeholder' => __('Número de documento', 'efipay'),
+        'required'    => true,
+        'class'       => array('form-row-wide'),
+        'priority'    => 36,
+    );
+    return $fields;
+}
+
+add_action('woocommerce_checkout_update_order_meta', 'efipay_save_identification_checkout_fields', 10, 2);
+function efipay_save_identification_checkout_fields($order_id, $posted = null) {
+    if (!empty($_POST['billing_identification_type'])) {
+        update_post_meta($order_id, '_billing_identification_type', sanitize_text_field($_POST['billing_identification_type']));
+    }
+    if (!empty($_POST['billing_identification_number'])) {
+        update_post_meta($order_id, '_billing_identification_number', sanitize_text_field($_POST['billing_identification_number']));
+    }
+    if (get_current_user_id() && !empty($_POST['billing_identification_type'])) {
+        update_user_meta(get_current_user_id(), 'billing_identification_type', sanitize_text_field($_POST['billing_identification_type']));
+    }
+    if (get_current_user_id() && !empty($_POST['billing_identification_number'])) {
+        update_user_meta(get_current_user_id(), 'billing_identification_number', sanitize_text_field($_POST['billing_identification_number']));
+    }
+}
+
+add_filter('woocommerce_checkout_get_value', 'efipay_prefill_identification_checkout', 10, 2);
+function efipay_prefill_identification_checkout($value, $input) {
+    if ($value !== null) return $value;
+    $user_id = get_current_user_id();
+    if (!$user_id) return $value;
+    if ($input === 'billing_identification_type') {
+        return get_user_meta($user_id, 'billing_identification_type', true) ?: $value;
+    }
+    if ($input === 'billing_identification_number') {
+        return get_user_meta($user_id, 'billing_identification_number', true) ?: $value;
+    }
+    return $value;
+}
+
+add_action('woocommerce_admin_order_data_after_billing_address', 'efipay_display_identification_in_admin', 10, 1);
+function efipay_display_identification_in_admin($order) {
+    $type = $order->get_meta('_billing_identification_type');
+    $number = $order->get_meta('_billing_identification_number');
+    if ($type || $number) {
+        echo '<p><strong>' . esc_html__('Tipo de identificación', 'efipay') . ':</strong> ' . esc_html($type) . '<br>';
+        echo '<strong>' . esc_html__('Número de identificación', 'efipay') . ':</strong> ' . esc_html($number) . '</p>';
+    }
+}
+
 add_action('woocommerce_loaded', 'woocommerce_efipay_gateway');
 
 function woocommerce_efipay_gateway() {
     if (!class_exists('WC_Payment_Gateway')) return;
 
     class WC_Efipay extends WC_Payment_Gateway {
+
+        /** Monedas aceptadas por la pasarela Efipay */
+        const SUPPORTED_CURRENCIES = array('USD', 'COP', 'EUR');
+
         public function __construct() {
             $this->id = 'efipay';
             $this->icon = apply_filters('woocomerce_efipay_icon', plugins_url('/img/logoEfipay.png', __FILE__));
             $this->has_fields = false;
             $this->method_title = 'Efipay (tarjetas debito, credito, pse, efectivos)';
-            $this->method_description = 'Integración de Woocommerce a la pasarela de pagos de Efipay';
+            $this->method_description = 'Integración de Woocommerce a la pasarela de pagos de Efipay. Solo acepta USD, COP y EUR.';
 
             $this->init_form_fields();
             $this->init_settings();
@@ -97,7 +185,6 @@ function woocommerce_efipay_gateway() {
             $this->enabled_embebed = $this->get_option('enabled_embebed');
             $this->api_key = $this->get_option('api_key');
             $this->office_id = $this->get_option('office_id');
-            $this->currency = $this->get_option('currency');
             $this->webhook_url = $this->get_option('webhook_url');
             $this->token = $this->get_option('token');
 
@@ -111,6 +198,26 @@ function woocommerce_efipay_gateway() {
 
         }
 
+        /**
+         * Comprueba si la moneda actual de WooCommerce está soportada por Efipay (USD, COP, EUR).
+         */
+        public function is_currency_supported() {
+            $currency = get_woocommerce_currency();
+            return in_array($currency, self::SUPPORTED_CURRENCIES, true);
+        }
+
+        /**
+         * Solo mostrar el método de pago si está habilitado y la moneda es USD, COP o EUR.
+         */
+        public function is_available() {
+            if ($this->enabled !== 'yes') {
+                return false;
+            }
+            if (!$this->is_currency_supported()) {
+                return false;
+            }
+            return parent::is_available();
+        }
 
         public function init_form_fields() {
             $this->form_fields = array(
@@ -119,12 +226,6 @@ function woocommerce_efipay_gateway() {
                     'type' => 'checkbox',
                     'label' => __('Habilita la opcion de pago incrustado en tu sitio web', 'efipay'),
                     'default' => 'no'
-                ),
-                'currency' => array(
-                    'title' => __('Moneda', 'efipay'),
-                    'type' => 'select',
-                    'options' => array('COP' => 'COP', 'USD' => 'USD', 'EUR' => 'EUR'),
-                    'description' => __('Selecciona la moneda con la cual se realizará el pago.', 'efipay')
                 ),
                 'api_key' => array(
                     'title' => __('API Key', 'efipay'),
@@ -149,6 +250,14 @@ function woocommerce_efipay_gateway() {
 			echo "<div style='text-align: center;'>";
 			echo      "<img src=\"" . $this->icon . "\" style='object-fit: cover;width: 200px;'></img>";
 			echo "</div>";
+			if (!$this->is_currency_supported()) {
+				$currency = get_woocommerce_currency();
+				echo '<div class="notice notice-warning inline"><p><strong>' . esc_html__('Efipay no está disponible en el checkout:', 'efipay') . '</strong> ';
+				echo esc_html(sprintf(
+					__('La moneda configurada en WooCommerce (%s) no es soportada por esta pasarela. Efipay solo acepta USD, COP y EUR. Cambia la moneda en WooCommerce → Ajustes → General para poder usar este método de pago.', 'efipay'),
+					$currency
+				)) . '</p></div>';
+			}
 			$this->generate_settings_html();
 			echo "</table>";
 			echo "</div>";
@@ -170,6 +279,12 @@ function woocommerce_efipay_gateway() {
 		public function get_params_post($order_id): array {
             $order = wc_get_order($order_id);
             $currency = get_woocommerce_currency();
+            if (!in_array($currency, self::SUPPORTED_CURRENCIES, true)) {
+                throw new Exception(sprintf(
+                    __('La moneda configurada (%s) no es soportada por Efipay. Solo se aceptan USD, COP y EUR.', 'efipay'),
+                    $currency
+                ));
+            }
             $amount = number_format(($order->get_total()), 2, '.', '');
             $description = implode(',', array_column($order->get_items(), 'name'));
             if (strlen($description) > 255) {
@@ -218,9 +333,63 @@ function woocommerce_efipay_gateway() {
             return $parameters_args;
         }
 
-
+		/**
+		 * Datos del cliente desde el pedido de WooCommerce (facturación estándar + tipo/número identificación).
+		 * Así no se piden de nuevo en la página de pago Efipay y es igual en todas las tiendas.
+		 * Usa siempre campos de billing (facturación) que siempre existen, incluso sin formulario de envío.
+		 */
+		public function get_customer_data_for_receipt($order) {
+			if (is_numeric($order)) {
+				$order = wc_get_order($order);
+			}
+			if (!$order || !($order instanceof WC_Order)) {
+				return array();
+			}
+			
+			// Siempre usar billing (facturación) que siempre existe en WooCommerce
+			$name = trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name());
+			$phone = $order->get_billing_phone();
+			$country = $order->get_billing_country();
+			$state_code = $order->get_billing_state();
+			
+			// Obtener nombre completo del estado desde el código (ej: CO-AMA -> Amazonas)
+			$state_name = $state_code;
+			if ($state_code && $country && function_exists('WC') && WC()->countries) {
+				$states = WC()->countries->get_states($country);
+				if ($states && isset($states[$state_code])) {
+					$state_name = $states[$state_code];
+				}
+			}
+			
+			return array(
+				'name'                   => $name ?: '',
+				'email'                  => $order->get_billing_email() ?: '',
+				'phone'                  => $phone ?: '',
+				'address_1'              => $order->get_billing_address_1() ?: '',
+				'address_2'              => $order->get_billing_address_2() ?: '',
+				'city'                   => $order->get_billing_city() ?: '',
+				'state'                  => $state_name ?: '',
+				'state_code'             => $state_code ?: '', // Guardar también el código por si se necesita
+				'postcode'               => $order->get_billing_postcode() ?: '',
+				'zip_code'               => $order->get_billing_postcode() ?: '',
+				'country'                => $country ?: '',
+				'identification_type'    => $order->get_meta('_billing_identification_type') ?: 'CC',
+				'identification_number'  => $order->get_meta('_billing_identification_number') ?: '',
+			);
+		}
 
 		public function process_payment($order_id) {
+            if (!$this->is_currency_supported()) {
+                $currency = get_woocommerce_currency();
+                wc_add_notice(
+                    sprintf(
+                        __('La moneda configurada en la tienda (%s) no es soportada por la pasarela Efipay. Esta pasarela solo acepta pagos en USD, COP y EUR. Por favor, elige otro método de pago o contacta con la tienda.', 'efipay'),
+                        $currency
+                    ),
+                    'error'
+                );
+                return array('result' => 'failure');
+            }
             $order = wc_get_order($order_id);
             if (version_compare(WOOCOMMERCE_VERSION, '2.0.19', '<=')) {
                 return array(

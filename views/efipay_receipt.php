@@ -33,6 +33,90 @@ $order_received_url = isset($parameters_args['advanced_options']['result_urls'][
     </div>
 </div>
 
+<style>
+/* Interfaz 3D Secure - Challenge */
+#efipay-3ds-container { margin-top: 24px; }
+.efipay-3ds-challenge-card {
+    background: linear-gradient(145deg, #1e3a5f 0%, #0d2137 100%);
+    border-radius: 16px;
+    padding: 28px;
+    margin-bottom: 20px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.08);
+    border: 1px solid rgba(255,255,255,0.08);
+}
+.efipay-3ds-challenge-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 24px;
+    gap: 16px;
+}
+.efipay-3ds-challenge-icon {
+    width: 52px;
+    height: 52px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.efipay-3ds-challenge-icon svg { display: block; }
+.efipay-3ds-challenge-title { margin: 0; font-size: 20px; font-weight: 700; color: #fff; letter-spacing: -0.02em; }
+.efipay-3ds-challenge-desc { margin: 6px 0 0 0; font-size: 14px; color: rgba(255,255,255,0.85); line-height: 1.4; }
+.efipay-3ds-challenge-body {
+    min-height: 320px;
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: inset 0 1px 0 rgba(0,0,0,0.05);
+}
+.efipay-3ds-challenge-body iframe { max-width: 100%; border: none; }
+.efipay-3ds-btn-continue {
+    width: 100%;
+    padding: 16px 24px;
+    border-radius: 10px;
+    border: 0;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    color: #fff;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 600;
+    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 4px 14px rgba(37,99,235,0.4);
+}
+.efipay-3ds-btn-continue:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(37,99,235,0.5);
+}
+.efipay-3ds-btn-continue:active { transform: translateY(0); }
+</style>
+<!-- Contenedores para flujo 3DS -->
+<div id="efipay-3ds-container" style="display:none;">
+    <!-- Contenedor para DDC/iframe oculto (Credibanco y Redeban) -->
+    <div id="hidden3ds" style="display:none;"></div>
+    
+    <!-- Contenedor para Challenge visible -->
+    <div id="challenge3ds-wrapper" style="display:none;">
+        <div class="efipay-3ds-challenge-card">
+            <div class="efipay-3ds-challenge-header">
+                <div class="efipay-3ds-challenge-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z" fill="currentColor"/>
+                    </svg>
+                </div>
+                <div style="flex:1;">
+                    <h3 class="efipay-3ds-challenge-title">Autenticación 3D Secure</h3>
+                    <p class="efipay-3ds-challenge-desc">Tu banco puede solicitar una verificación adicional. Sigue las instrucciones en la ventana de abajo y, al terminar, pulsa «Validar transacción».</p>
+                </div>
+            </div>
+            <div id="challenge3ds" class="efipay-3ds-challenge-body"></div>
+        </div>
+        <div id="efipay-3ds-actions" style="display:none;">
+            <button type="button" id="efipay-3ds-continue" class="efipay-3ds-btn-continue">✓ Validar transacción</button>
+        </div>
+    </div>
+</div>
+
 <script src="<?php echo plugins_url('../js/sweetalert2@11.js', __FILE__); ?>"></script>
 
 <script>
@@ -40,6 +124,15 @@ const apiKey = "<?php echo esc_js($this->api_key); ?>";
 const enabledEmbebed = "<?php echo esc_js($this->enabled_embebed); ?>";
 const efipayOrderReceivedUrl = "<?php echo esc_url($order_received_url); ?>";
 const efipayCustomerData = <?php echo json_encode($customer_data, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+const EFIPAY_API_BASE = "https://sag.efipay.co/api/v1";
+
+// Estado 3DS en memoria (para que scripts embebidos puedan disparar la continuación si lo requieren)
+window.__efipay3ds = {
+    transactionId: null,
+    implementation: null, // 'credibanco' | 'redeban'
+    paymentCard: null,
+    browserInformation: null,
+};
 // Ejemplo de función que llama a una función de WooCommerce para vaciar el carrito
 function clearCart() {
     // Realizar una solicitud AJAX
@@ -89,6 +182,465 @@ function hideSpinner(){
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Flujos 3DS según documentación Efipay (Credibanco Visa / Redeban MasterCard)
+ *
+ * CREDIBANCO (Visa):
+ * 1. transaction-checkout devuelve 3Ds (browser_response string con ddc-form, centinelapistag)
+ * 2. Inyectar HTML en hidden3ds, enviar ddc-form, escuchar postMessage desde Cardinal
+ * 3. Al recibir mensaje con Status → llamar Enroll
+ * 4. Enroll puede devolver: (A) solo transaction (estado final) → finalizar UI
+ *    o (B) transaction + 3Ds.browser_response (challenge) → mostrar challenge, botón "Validar"; al pulsar → Enroll de nuevo → estado final
+ *
+ * REDEBAN (MasterCard):
+ * 1. transaction-checkout devuelve 3Ds (browser_response objeto: hidden_iframe con HTML, challenge_request vacío)
+ * 2. Inyectar hidden_iframe en hidden3ds, ejecutar scripts, esperar 5s → llamar auth-continue
+ * 3. auth-continue puede devolver: (A) solo transaction → finalizar UI
+ *    o (B) transaction + 3Ds.browser_response.challenge_request (HTML challenge) → mostrar challenge, botón "Validar"; al pulsar → auth-continue de nuevo → estado final
+ */
+async function handle3dsFlowFromResponse(data_payment) {
+    const threeDs = data_payment?.['3Ds'] || data_payment?.['3ds'] || null;
+    const transaction = data_payment?.transaction || null;
+    if (!threeDs || !transaction || !transaction.transaction_id) {
+        return false;
+    }
+    if (!isPendingStatus(transaction.status)) {
+        return false;
+    }
+
+    window.__efipay3ds.transactionId = transaction.transaction_id;
+    window.__efipay3ds.implementation = (threeDs.implementation || '').toLowerCase();
+    window.__efipay3ds.paymentCard = getPaymentCardFor3ds();
+    window.__efipay3ds.browserInformation = getBrowserInformationFor3ds();
+
+    const impl = window.__efipay3ds.implementation;
+
+    try {
+        showSpinner();
+        window.authContinueTransaction = async function () {
+            return await continue3dsAndMaybeChallenge();
+        };
+        window.enrollTransaction = async function () {
+            return await continue3dsAndMaybeChallenge();
+        };
+
+        if (impl === 'credibanco') {
+            await handleCredibanco3dsInitial(threeDs);
+        } else if (impl === 'redeban') {
+            await handleRedeban3dsInitial(threeDs);
+        } else {
+            throw new Error(`Implementación 3DS no reconocida: ${impl}`);
+        }
+
+        return true;
+    } catch (error) {
+        console.error('Error en flujo 3DS inicial:', error);
+        hideSpinner();
+        Swal.fire({
+            title: "Error en autenticación 3DS",
+            text: error?.message || String(error),
+            icon: "error"
+        });
+        return false;
+    }
+}
+
+function isPendingStatus(status) {
+    return ['Pendiente', 'Iniciada'].includes(status);
+}
+
+function getPaymentCardFor3ds() {
+    return {
+        number: document.getElementById('efipay_payment_card_number')?.value,
+        name: document.getElementById('efipay_payment_card_name')?.value,
+        expiration_date: document.getElementById('efipay_payment_card_expiration_date')?.value,
+        cvv: document.getElementById('efipay_payment_card_cvv')?.value,
+    };
+}
+
+function getBrowserInformationFor3ds() {
+    // Get color depth
+    const colorDepth = String(window.screen.colorDepth);
+    // Check if JavaScript is enabled (if this runs, JavaScript is enabled)
+    const jsEnabled = true;
+    let javaEnabled = false;
+    try {
+        javaEnabled = navigator.javaEnabled();
+    } catch (error) {
+        const javaEnabled = false;
+    }
+    // Get browser language
+    const language = navigator.language || navigator.userLanguage;
+    // Get screen height and width
+    const screenHeight = window.innerHeight;
+    const screenWidth = window.innerWidth;
+    // Calculate time difference from UTC (in hours)
+    const timeDifference = new Date().getTimezoneOffset();
+
+    return {
+        colorDepth,
+        language,
+        screenHeight,
+        screenWidth,
+        timeDifference,
+        javaScriptEnabled: jsEnabled,
+        javaEnabled,
+    }
+}
+
+async function continue3dsAndMaybeChallenge() {
+    showSpinner();
+    try {
+        const data3ds = await call3dsContinueEndpoint();
+
+        const transaction = data3ds?.transaction;
+    const threeDs = data3ds?.['3Ds'] || data3ds?.['3ds'] || null;
+
+    // Si hay challenge, renderizarlo y dejar un botón manual para "Validar transacción"
+    // Verificar si hay challenge según la implementación
+    const hasChallenge = checkForChallenge(threeDs);
+    
+    if (hasChallenge) {
+        hideSpinner();
+        setup3dsChallenge(threeDs);
+
+        // Botón manual para que el usuario continúe una vez complete el challenge
+        setContinue3dsButtonVisible(true, async () => {
+            try {
+                showSpinner();
+                setContinue3dsButtonVisible(false);
+                // Llamar recursivamente para continuar después del challenge
+                await continue3dsAndMaybeChallenge();
+            } catch (e) {
+                hideSpinner();
+                Swal.fire({ 
+                    title: "Error", 
+                    text: e?.message || String(e), 
+                    icon: "error" 
+                });
+            }
+        });
+
+        // Mensaje informativo sin bloquear la interacción
+        Swal.fire({
+            toast: true,
+            position: 'top',
+            icon: 'info',
+            title: 'Autenticación 3DS',
+            text: 'Completa la validación en tu banco. Luego pulsa “Validar transacción”.',
+            showConfirmButton: false,
+            timer: 4500,
+        });
+        return;
+    }
+
+    // Sin challenge: si ya viene transacción final, cerrar flujo con el UI existente
+    if (transaction && transaction.status) {
+        setContinue3dsButtonVisible(false);
+        hideSpinner();
+        await finalizeTransactionUI(transaction);
+        return;
+    }
+
+        hideSpinner();
+        throw new Error("No se recibió información válida al continuar el flujo 3DS.");
+    } catch (error) {
+        hideSpinner();
+        throw error;
+    }
+}
+
+function checkForChallenge(threeDs) {
+    if (!threeDs || !threeDs.browser_response) {
+        return false;
+    }
+    
+    // browser_response puede ser string (formato antiguo) u objeto (formato nuevo)
+    if (typeof threeDs.browser_response === 'string') {
+        return threeDs.browser_response.trim().length > 0;
+    }
+    
+    // Formato nuevo: objeto con challenge_request y hidden_iframe
+    if (typeof threeDs.browser_response === 'object') {
+        const challengeRequest = threeDs.browser_response.challenge_request || '';
+        return challengeRequest.trim().length > 0;
+    }
+    
+    return false;
+}
+
+async function call3dsContinueEndpoint() {
+    const { transactionId, implementation, paymentCard, browserInformation } = window.__efipay3ds;
+    if (!transactionId || !implementation) {
+        throw new Error("No hay información suficiente para continuar el 3DS.");
+    }
+
+    const impl = implementation.toLowerCase();
+    // Credibanco: Postman usa /3ds/Enroll/ (E mayúscula). Redeban: auth-continue
+    const endpoint =
+        impl === 'credibanco'
+            ? `${EFIPAY_API_BASE}/payment/3ds/Enroll/${transactionId}`
+            : `${EFIPAY_API_BASE}/payment/3ds/auth-continue/${transactionId}`;
+
+    const body = {
+        payment_card: paymentCard,
+        browser_information: browserInformation,
+    };
+
+    const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+        if (response.status === 422) {
+            const errorData = await response.json();
+            throw new Error(JSON.stringify(errorData.errors || errorData));
+        }
+        throw new Error("Error en la respuesta del servidor 3DS, revisa tu configuración de pagos o comunícate con soporte@efipay.co");
+    }
+    return response.json();
+}
+
+function setContinue3dsButtonVisible(visible, onClick) {
+    const actions = document.getElementById('efipay-3ds-actions');
+    const btn = document.getElementById('efipay-3ds-continue');
+    if (!actions || !btn) return;
+
+    actions.style.display = visible ? 'block' : 'none';
+    btn.onclick = null;
+    if (visible && typeof onClick === 'function') {
+        btn.onclick = onClick;
+    }
+}
+
+function setup3dsChallenge(threeDsObj) {
+    // Challenge (visible) - Manejar formato nuevo (objeto) y antiguo (string)
+    show3dsContainers();
+    const challengeWrapper = document.getElementById("challenge3ds-wrapper");
+    const challengeElement = document.getElementById("challenge3ds");
+    
+    if (!challengeWrapper || !challengeElement) return;
+
+    challengeWrapper.style.display = 'block';
+    
+    // Obtener el HTML del challenge según el formato
+    let challengeHtml = '';
+    if (typeof threeDsObj?.browser_response === 'string') {
+        // Formato antiguo: string directo
+        challengeHtml = threeDsObj.browser_response;
+    } else if (typeof threeDsObj?.browser_response === 'object') {
+        // Formato nuevo: objeto con challenge_request
+        challengeHtml = threeDsObj.browser_response.challenge_request || '';
+    }
+    
+    challengeElement.innerHTML = challengeHtml;
+    runScriptsInside(challengeElement);
+
+    // Buscar y enviar formularios automáticamente
+    const forms = challengeElement.querySelectorAll('form');
+    forms.forEach(form => {
+        // Buscar formularios con id específicos o que tengan action
+        if (form.id === 'threeD' || form.id === 'step-up-form' || form.action) {
+            try {
+                // Pequeño delay para asegurar que el DOM esté listo
+                setTimeout(() => {
+                    form.submit();
+                }, 100);
+            } catch (e) {
+                console.error('Error al enviar formulario del challenge:', e);
+            }
+        }
+    });
+}
+
+// ========== FUNCIONES REFACTORIZADAS PARA CREDIBANCO Y REDEBAN ==========
+
+async function handleCredibanco3dsInitial(threeDsObj) {
+    // Credibanco: Manejar formato nuevo (objeto) y antiguo (string)
+    show3dsContainers();
+    const wrappedElement = document.getElementById("hidden3ds");
+    if (!wrappedElement) return;
+
+    wrappedElement.style.display = 'none';
+    
+    // Obtener HTML según el formato
+    let htmlContent = '';
+    if (typeof threeDsObj?.browser_response === 'string') {
+        htmlContent = threeDsObj.browser_response;
+    } else if (typeof threeDsObj?.browser_response === 'object') {
+        // Formato nuevo: usar hidden_iframe si está disponible
+        htmlContent = threeDsObj.browser_response.hidden_iframe || '';
+    }
+    
+    wrappedElement.innerHTML = htmlContent;
+    runScriptsInside(wrappedElement);
+
+    // Credibanco: el HTML puede traer action completo (ej. .../V1/Cruise/Collect). Solo asignar centinelapistag si el form no tiene action o no apunta al host de Cardinal
+    const ddcForm = wrappedElement.querySelector('#ddc-form') || document.querySelector('#ddc-form');
+    if (ddcForm && threeDsObj?.centinelapistag) {
+        try {
+            const centinelHost = new URL(threeDsObj.centinelapistag).host;
+            if (!ddcForm.action || ddcForm.action === '' || !ddcForm.action.includes(centinelHost)) {
+                ddcForm.action = threeDsObj.centinelapistag;
+            }
+        } catch (e) {
+            ddcForm.action = threeDsObj.centinelapistag;
+        }
+    }
+    
+    if (ddcForm) {
+        try {
+            ddcForm.submit();
+        } catch (e) {
+            console.error('Error al enviar formulario DDC de Credibanco:', e);
+        }
+    }
+
+    // Esperar mensaje del window después de enviar DDC
+    await handleCredibanco3dsMessage(threeDsObj);
+}
+
+async function handleCredibanco3dsMessage(threeDsObj) {
+    return new Promise((resolve, reject) => {
+        let eventMessage3ds = false;
+        const threeDsTimeOut = setTimeout(() => {
+            if (!eventMessage3ds) {
+                reject(new Error('Error: demasiado tiempo esperando mensaje 3DS de Credibanco'));
+            }
+        }, 50000);
+
+        const messageHandler = async (event) => {
+            // Verificar origen del mensaje
+            if (threeDsObj?.centinelapistag) {
+                try {
+                    const centinelUrl = new URL(threeDsObj.centinelapistag);
+                    if (event.origin !== centinelUrl.origin) {
+                        return;
+                    }
+                } catch (e) {
+                    // Si no se puede parsear la URL, continuar
+                }
+            }
+
+            eventMessage3ds = true;
+            clearTimeout(threeDsTimeOut);
+            window.removeEventListener('message', messageHandler);
+
+            try {
+                let data = null;
+                if (typeof event.data === 'string') {
+                    try {
+                        data = JSON.parse(event.data);
+                    } catch (e) {
+                        reject(new Error('Error al parsear mensaje 3DS de Credibanco'));
+                        return;
+                    }
+                } else {
+                    data = event.data;
+                }
+
+                if (data !== undefined && data.Status) {
+                    console.log('Songbird ran DF successfully');
+                    // Continuar con enroll
+                    try {
+                        await continue3dsAndMaybeChallenge();
+                        resolve();
+                    } catch (error) {
+                        reject(error);
+                    }
+                } else {
+                    reject(new Error('Error: evento de mensaje front status 3DS inválido'));
+                }
+            } catch (error) {
+                reject(error);
+            }
+        };
+
+        window.addEventListener('message', messageHandler, false);
+    });
+}
+
+async function handleRedeban3dsInitial(threeDsObj) {
+    // Redeban: Manejar formato nuevo (objeto) y antiguo (string)
+    show3dsContainers();
+    const wrappedElement = document.getElementById("hidden3ds");
+    if (!wrappedElement) return;
+
+    wrappedElement.style.display = 'none';
+    
+    // Obtener HTML según el formato
+    let htmlContent = '';
+    if (typeof threeDsObj?.browser_response === 'string') {
+        htmlContent = threeDsObj.browser_response;
+    } else if (typeof threeDsObj?.browser_response === 'object') {
+        // Formato nuevo: usar hidden_iframe
+        htmlContent = threeDsObj.browser_response.hidden_iframe || '';
+    }
+    
+    wrappedElement.innerHTML = htmlContent;
+    runScriptsInside(wrappedElement);
+
+    // Redeban: Esperar 5 segundos después de ejecutar scripts, luego llamar auth-continue
+    await sleep(5000);
+    console.log("Redeban: timeout 5sec completado, llamando auth-continue");
+    await continue3dsAndMaybeChallenge();
+}
+
+function setup3DsIframe(threeDsObj) {
+    // Función legacy - ahora delegamos a las funciones específicas
+    const impl = (threeDsObj?.implementation || '').toLowerCase();
+    if (impl === 'credibanco') {
+        handleCredibanco3dsInitial(threeDsObj);
+    } else if (impl === 'redeban') {
+        handleRedeban3dsInitial(threeDsObj);
+    }
+}
+
+function runScriptsInside(containerEl) {
+    // Necesario porque innerHTML NO ejecuta scripts; la doc recomienda recrearlos para que corran
+    Array.from(containerEl.querySelectorAll("script")).forEach(oldScriptEl => {
+        const newScriptEl = document.createElement("script");
+        Array.from(oldScriptEl.attributes).forEach(attr => {
+            newScriptEl.setAttribute(attr.name, attr.value);
+        });
+        const scriptText = document.createTextNode(oldScriptEl.innerHTML || "");
+        newScriptEl.appendChild(scriptText);
+        oldScriptEl.parentNode.replaceChild(newScriptEl, oldScriptEl);
+    });
+}
+
+function show3dsContainers() {
+    const root = document.getElementById('efipay-3ds-container');
+    if (root) root.style.display = 'block';
+}
+
+function hide3dsChallengeUI() {
+    const wrapper = document.getElementById('challenge3ds-wrapper');
+    const actions = document.getElementById('efipay-3ds-actions');
+    if (wrapper) wrapper.style.display = 'none';
+    if (actions) actions.style.display = 'none';
+}
+
+async function finalizeTransactionUI(transaction) {
+    hideSpinner();
+    hide3dsChallengeUI();
+    await Swal.fire({
+        icon: transaction.status === 'Aprobada' ? 'success' : transaction.status === 'Rechazada' ? 'error' : 'warning',
+        title: 'Estado',
+        text: 'Estado de la transacción: ' + transaction.status + `${transaction.status !== 'Aprobada' ? ', Intenta nuevamente' : ''}`,
+    });
+    if (transaction.status === 'Aprobada') {
+        await clearCart();
+        window.location.href = "<?php echo home_url(); ?>";
+    }
 }
 
 function generatePayment(type, data) {
@@ -158,7 +710,9 @@ function generatePayment(type, data) {
                     var send_data = {
                         payment: payment,
                         customer_payer: customerPayer,
-                        payment_card: paymentData
+                        payment_card: paymentData,
+                        browser_information: getBrowserInformationFor3ds(),
+                        enable_3ds: true
                     }
 
                     fetch("https://sag.efipay.co/api/v1/payment/transaction-checkout", {
@@ -181,16 +735,12 @@ function generatePayment(type, data) {
                         }
                         return response.json();
                     }).then(async data_payment => {
-                        hideSpinner()
-                        await Swal.fire({
-                            icon: data_payment.transaction.status === 'Aprobada' ? 'success' : data_payment.transaction.status === 'Rechazada' ? 'error' : 'warning',
-                            title: 'Estado',
-                            text: 'Estado de la transacción: ' + data_payment.transaction.status + `${data_payment.transaction.status !== 'Aprobada' ? ', Intenta nuevamente' : ''}`,
-                        });
-                        if (data_payment.transaction.status === 'Aprobada') {
-                            await clearCart();
-                            window.location.href = efipayOrderReceivedUrl;
-                        }
+                        // Si la respuesta incluye 3DS y está pendiente, continuar el flujo según documentación
+                        const didHandle3ds = await handle3dsFlowFromResponse(data_payment);
+                        if (didHandle3ds) return;
+
+                        // Flujo normal (sin 3DS)
+                        await finalizeTransactionUI(data_payment.transaction);
                     }).catch(error => {
 
                         let html = '<ul>';
@@ -572,7 +1122,7 @@ async function getPaymentsAvailable() {
                             <label for="efipay_payment_card_zip_code">Zip Code</label>
                             <input type="text" id="efipay_payment_card_zip_code" name="zip_code"  >
 
-                            <button onClick="generatePayment('api', <?php echo htmlentities($data); ?>)" id="submit_efipay" disabled>
+                            <button type="button" onClick="generatePayment('api', <?php echo htmlentities($data); ?>); return false;" id="submit_efipay" disabled>
                                 Pagar
 
                                 <span id="efipay-spinner" class="efipay-loader" style="display: none;"></span>

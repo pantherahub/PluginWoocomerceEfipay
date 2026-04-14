@@ -3,7 +3,7 @@
 Plugin Name: Efipay Gateway Payment WooCommerce 
 Plugin URI: https://sag.efipay.co/docs/1.0/overview
 Description: Plugin de integracion entre Wordpress-Woocommerce con Efipay
-Version: 2.2.0
+Version: 2.2.1
 Author: Efipay
 Author URI: https://efipay.co
 */
@@ -419,54 +419,111 @@ function woocommerce_efipay_gateway() {
 
 add_action('woocommerce_api_efipay_webhook', 'handle_efipay_webhook');
 function handle_efipay_webhook($request) {
+	$logger = function_exists('wc_get_logger') ? wc_get_logger() : null;
+	$log_context = array('source' => 'efipay-webhook');
+	$log = function($level, $message) use ($logger, $log_context) {
+		if ($logger && method_exists($logger, $level)) {
+			$logger->{$level}($message, $log_context);
+			return;
+		}
+		error_log('Efipay webhook [' . strtoupper($level) . ']: ' . $message);
+	};
 
-	// $computedSignature = hash_hmac('sha256', $request->getContent(), $this->token);
+	$log('info', 'Inicio de procesamiento del webhook.');
+	$settings = get_option('woocommerce_efipay_settings', array());
+	$webhook_token = isset($settings['token']) ? trim((string) $settings['token']) : '';
+	if ($webhook_token === '') {
+		$log('error', 'Token no configurado para validar firma.');
+		wp_send_json_error('Webhook no configurado', 500);
+	}
+	$log('info', 'Token de webhook cargado.');
 
-	$body = json_decode($request->get_body(), true);
-	$transaction_data = $body['transaction']; 
-	$checkout = $body['checkout'];
+	$raw_body = ($request instanceof WP_REST_Request) ? $request->get_body() : file_get_contents('php://input');
+	$log('info', 'Body recibido. Longitud: ' . strlen((string) $raw_body));
+	$signature = '';
+	if ($request instanceof WP_REST_Request) {
+		$signature = $request->get_header('signature');
+	}
+	if (empty($signature) && isset($_SERVER['HTTP_SIGNATURE'])) {
+		$signature = wp_unslash($_SERVER['HTTP_SIGNATURE']);
+	}
+	$signature = trim((string) $signature);
+	if ($signature === '') {
+		$log('error', 'Header Signature ausente.');
+		wp_send_json_error('Firma no enviada', 401);
+	}
+	$log('info', 'Header Signature recibido.');
+
+	$computed_signature = hash_hmac('sha256', $raw_body, $webhook_token);
+	if (!hash_equals($computed_signature, $signature)) {
+		$log('error', 'Firma invalida.');
+		wp_send_json_error('Firma invalida', 401);
+	}
+	$log('info', 'Firma validada correctamente.');
+
+	$body = json_decode($raw_body, true);
+	if (!is_array($body)) {
+		$log('error', 'Payload JSON invalido.');
+		wp_send_json_error('JSON invalido', 400);
+	}
+	$log('info', 'Payload JSON parseado correctamente.');
+
+	$transaction_data = $body['transaction'] ?? null;
+	$checkout = $body['checkout'] ?? array();
 
 	if (!isset($transaction_data)) {
-		error_log("No se ha recibido información de la transacción");
+		$log('error', 'No se ha recibido informacion de la transaccion.');
 		wp_die("Error interno del servidor", "Error", array(
 			'response' => 500
 		));
 	}
+	$log('info', 'Transaccion recibida con estado: ' . (($transaction_data['status'] ?? 'desconocido')));
 
 	$order_id = $checkout['payment_gateway']['advanced_option']['references'][0] ?? $body['payment_gateway']['advanced_option']['references'][0];
 	if (!isset($order_id)) {
+		$log('error', 'No se ha recibido informacion de referencia para order_id.');
 		die("No se ha recibido información de referencia");
 	}
+	$log('info', 'Referencia de pedido detectada. order_id=' . $order_id);
 
+	// $log('info', 'Datos de transaccion: ' . wp_json_encode($transaction_data));
 	try {
 		$order = wc_get_order($order_id);
 		if(!$order){
+			$log('error', 'No se ha encontrado el pedido con order_id=' . $order_id);
 			die("No se ha encontrado el pedido");
 		}
+		$log('info', 'Pedido cargado correctamente.');
 
 		switch ($transaction_data['status']) {
 			case 'Aprobada':
 				$order->update_status('completed', __('Pago completado a través de efipay.', 'efipay'));
+				$log('info', 'Estado del pedido actualizado a completed.');
 				break;
 			case 'Iniciada':
             case 'Pendiente':
             case 'Por Pagar':
 				$order->update_status('on-hold');
+				$log('info', 'Estado del pedido actualizado a on-hold.');
 				break;
             case 'Reversada':
             case 'Reversion Escalada':
                 $order->update_status('refunded');
+				$log('info', 'Estado del pedido actualizado a refunded.');
                 break;
 			default:
 				$order->update_status('failed');
+				$log('warning', 'Estado no mapeado, pedido actualizado a failed. Estado recibido: ' . ($transaction_data['status'] ?? 'sin_estado'));
 		}
 		
 		$order->add_order_note(__('Efipay transaction details', 'textdomain'));
 		foreach ($transaction_data as $key => $value) {
 			$order->add_order_note(sprintf("%s: %s", $key, $value));
 		}
+		$log('info', 'Notas de transaccion agregadas al pedido.');
 		wp_send_json_success( 'Pago procesado correctamente', 200 );
 	} catch (Exception $e) {
+		$log('error', 'Excepcion procesando webhook: ' . $e->getMessage());
 		add_filter('woocommerce_email_attachments', 'efipay_add_exception_to_emails', 10, 3);
 		wc_add_notice(sprintf(__('Se ha producido un error inesperado. Por favor, contacta con nosotros para más detalles.')));
 		wc_add_notice(sprintf(__('Error procesando el pago: %s', 'textdomain'), $e->getMessage()), 'error');
@@ -487,8 +544,9 @@ function custom_thankyou_page(){
 add_action( 'rest_api_init', 'register_webhook_route' );
 function register_webhook_route() {
 	register_rest_route( 'efipay/v1', '/webhook', array(
-		'methods'  => 'POST',
+        'methods' => 'POST',
         'callback' => 'handle_efipay_webhook',
+		'permission_callback' => '__return_true',
 	));
 }
 
